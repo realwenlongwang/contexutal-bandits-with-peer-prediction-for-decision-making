@@ -204,8 +204,8 @@ class DeterministicGradientAgent(Agent):
         self.experience[idx, :3] = features
         self.experience[idx, 3] = action
         self.experience[idx, 4] = reward
-        self.experience[idx, 5:8] = self.theta_mean
-        self.experience[idx, 8:11] = self.w_q
+        self.experience[idx, 5:8] = self.w_q
+        self.experience[idx, 8:11] = self.theta_mean
         self.experience[idx, 11:] = self.w_v
 
     def __sample_experience(self, t):
@@ -226,24 +226,24 @@ class DeterministicGradientAgent(Agent):
         signals = experience_batch[:, :3]
         actions = experience_batch[:, [3]]
         rewards = experience_batch[:, [4]]
-        theta_means = experience_batch[:, 5:8]
-        w_qs = experience_batch[:, 8:11]
+        w_qs = experience_batch[:, 5:8]
+        theta_means = experience_batch[:, 8:11]
         w_vs = experience_batch[:, 11:]
 
-        # thetas = np.sum(signals * theta_means, axis=1, keepdims=True)
-        thetas = np.dot(signals, self.theta_mean.T)
+        thetas = np.sum(signals * theta_means, axis=1, keepdims=True)
+        # thetas = np.dot(signals, self.theta_mean.T)
         phis = (actions - thetas) * signals
-        # vs = np.sum(signals * w_vs, axis=1, keepdims=True)
-        vs = np.dot(signals, self.w_v.T)
-        # qs = np.sum(phis * w_qs, axis=1, keepdims=True) + vs
-        qs = np.dot(phis, self.w_q.T) + vs
+        vs = np.sum(signals * w_vs, axis=1, keepdims=True)
+        # vs = np.dot(signals, self.w_v.T)
+        qs = np.sum(phis * w_qs, axis=1, keepdims=True) + vs
+        # qs = np.dot(phis, self.w_q.T) + vs
 
         deltas = rewards - qs
         deltas2 = rewards - qs
 
         # batch_gradient_means = signals * np.sum(signals * w_qs, axis=1, keepdims=True)
         # batch_gradient_means = signals * np.dot(signals, self.w_q.T)
-        batch_gradient_means = self.w_q  # Natural gradient
+        batch_gradient_means = w_qs  # Natural gradient
         batch_gradient_q = deltas * phis
         batch_gradient_v = deltas2 * signals
 
