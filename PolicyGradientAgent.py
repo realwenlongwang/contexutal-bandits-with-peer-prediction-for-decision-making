@@ -19,7 +19,7 @@ class Agent:
 
 class StochasticGradientAgent(Agent):
 
-    def __init__(self, feature_shape, learning_rate_theta, learning_rate_wv, experience_size=512, batch_size=16,
+    def __init__(self, feature_shape, learning_rate_theta, learning_rate_wv, memory_size=512, batch_size=16,
                  beta1=0.9, beta2=0.999,
                  epsilon=1e-8):
         # Actor weights
@@ -42,9 +42,9 @@ class StochasticGradientAgent(Agent):
         self.s_dw_std = np.zeros(feature_shape)
 
         # Experience replay
-        self.experience = np.zeros((experience_size, feature_shape[1] + 6))
+        self.memory = np.zeros((memory_size, feature_shape[1] + 6))
         self.batch_size = batch_size
-        self.experience_size = experience_size
+        self.memory_size = memory_size
 
 
     def report(self, features_list):
@@ -72,26 +72,26 @@ class StochasticGradientAgent(Agent):
         [v] = np.dot(self.w_v, features)
         delta = reward - v
 
-        idx = t % self.experience_size
-        self.experience[idx, :3] = features
-        self.experience[idx, 3] = h
-        self.experience[idx, 4] = mean
-        self.experience[idx, 5] = std
-        self.experience[idx, 6] = reward
-        self.experience[idx, 7] = delta
+        idx = t % self.memory_size
+        self.memory[idx, :3] = features
+        self.memory[idx, 3] = h
+        self.memory[idx, 4] = mean
+        self.memory[idx, 5] = std
+        self.memory[idx, 6] = reward
+        self.memory[idx, 7] = delta
 
         return v
 
     def __sample_experience(self, t):
 
         if t < self.batch_size:
-            return self.experience[:t + 1, :]
-        elif self.batch_size <= t < self.experience_size:
+            return self.memory[:t + 1, :]
+        elif self.batch_size <= t < self.memory_size:
             idx = np.random.randint(low=0, high=t + 1, size=self.batch_size)
-            return self.experience[idx, :]
+            return self.memory[idx, :]
         else:
-            idx = np.random.randint(self.experience_size, size=self.batch_size)
-            return self.experience[idx, :]
+            idx = np.random.randint(self.memory_size, size=self.batch_size)
+            return self.memory[idx, :]
 
     def batch_update(self, t, algorithm='adam'):
 
@@ -233,6 +233,7 @@ class DeterministicGradientAgent(Agent):
         thetas = np.sum(signals * theta_means, axis=1, keepdims=True)
         # thetas = np.dot(signals, self.theta_mean.T)
         phis = (actions - thetas) * signals
+
         vs = np.sum(signals * w_vs, axis=1, keepdims=True)
         # vs = np.dot(signals, self.w_v.T)
         qs = np.sum(phis * w_qs, axis=1, keepdims=True) + vs
