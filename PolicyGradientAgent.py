@@ -1,5 +1,5 @@
 import numpy as np
-from scipy.special import expit
+
 
 
 def gaussian(x, mu, sigma):
@@ -20,12 +20,13 @@ class Agent:
 class StochasticGradientAgent(Agent):
 
     def __init__(self, feature_shape, learning_rate_theta, learning_rate_wv, memory_size=512, batch_size=16,
-                 beta1=0.9, beta2=0.999,
-                 epsilon=1e-8):
+                 beta1=0.9, beta2=0.999, epsilon=1e-8, learning_std = True, fixed_std = 1.0):
         # Actor weights
         super().__init__(learning_rate_theta)
         self.theta_mean = np.zeros(feature_shape)
         self.theta_std = np.zeros(feature_shape)
+        self.learning_std = learning_std
+        self.fixed_std = fixed_std
         # Critic weights
         self.w_v = np.zeros(feature_shape)
         self.learning_rate_wv = learning_rate_wv
@@ -47,11 +48,15 @@ class StochasticGradientAgent(Agent):
         self.memory_size = memory_size
 
 
+
     def report(self, features_list):
 
         features = np.array(features_list)
         [mean] = np.dot(self.theta_mean, features.T)
-        [std] = np.exp(np.dot(self.theta_std, features.T))
+        if self.learning_std:
+            [std] = np.exp(np.dot(self.theta_std, features.T))
+        else:
+            std = self.fixed_std
 
         h = np.random.normal(mean, std)
 
@@ -87,10 +92,12 @@ class StochasticGradientAgent(Agent):
         if t < self.batch_size:
             return self.memory[:t + 1, :]
         elif self.batch_size <= t < self.memory_size:
-            idx = np.random.randint(low=0, high=t + 1, size=self.batch_size)
+            idx = np.random.choice(t+1, size=self.batch_size, replace=False)
+            # idx = np.random.randint(low=0, high=t + 1, size=self.batch_size) # with replacement but faster
             return self.memory[idx, :]
         else:
-            idx = np.random.randint(self.memory_size, size=self.batch_size)
+            idx = np.random.choice(self.memory_size, size=self.batch_size, replace=False)
+            # idx = np.random.randint(self.memory_size, size=self.batch_size) # with replacement but faster
             return self.memory[idx, :]
 
     def batch_update(self, t, algorithm='adam'):
@@ -105,51 +112,65 @@ class StochasticGradientAgent(Agent):
         deltas = experience_batch[:, [7]]
 
         batch_gradient_means = deltas * signals * ((hs - means) / np.power(stds, 2))
-        batch_gradient_stds = deltas * signals * (np.power(hs - means, 2) / np.power(stds, 2) - 1)
-        batch_gradient_v = deltas * signals
+        if self.learning_std:
+            batch_gradient_stds = deltas * signals * (np.power(hs - means, 2) / np.power(stds, 2) - 1)
+        # batch_gradient_v = deltas * signals
+        batch_gradient_v = rewards * signals
 
         gradient_mean = np.mean(batch_gradient_means, axis=0, keepdims=True)
-        gradient_std = np.mean(batch_gradient_stds, axis=0, keepdims=True)
+        if self.learning_std:
+            gradient_std = np.mean(batch_gradient_stds, axis=0, keepdims=True)
         gradient_v = np.mean(batch_gradient_v, axis=0, keepdims=True)
 
         # momentum update
         self.v_dw_mean = self.beta1 * self.v_dw_mean + (1 - self.beta1) * gradient_mean
-        self.v_dw_std = self.beta1 * self.v_dw_std + (1 - self.beta1) * gradient_std
+        if self.learning_std:
+            self.v_dw_std = self.beta1 * self.v_dw_std + (1 - self.beta1) * gradient_std
 
         # RMSprop update
         self.s_dw_mean = self.beta2 * self.s_dw_mean + (1 - self.beta2) * (np.power(gradient_mean, 2))
-        self.s_dw_std = self.beta2 * self.s_dw_std + (1 - self.beta2) * (np.power(gradient_std, 2))
+        if self.learning_std:
+            self.s_dw_std = self.beta2 * self.s_dw_std + (1 - self.beta2) * (np.power(gradient_std, 2))
 
         # bias correction
         v_dw_mean_corrected = self.v_dw_mean / (1 - np.power(self.beta1, t + 1))
-        v_dw_std_corrected = self.v_dw_std / (1 - np.power(self.beta1, t + 1))
+        if self.learning_std:
+            v_dw_std_corrected = self.v_dw_std / (1 - np.power(self.beta1, t + 1))
         s_dw_mean_corrected = self.s_dw_mean / (1 - np.power(self.beta2, t + 1))
-        s_dw_std_corrected = self.s_dw_std / (1 - np.power(self.beta2, t + 1))
+        if self.learning_std:
+            s_dw_std_corrected = self.s_dw_std / (1 - np.power(self.beta2, t + 1))
 
         # Adam term
         adam_dw_mean_corrected = (v_dw_mean_corrected / (np.sqrt(s_dw_mean_corrected) + self.epsilon))
-        adam_dw_std_corrected = (v_dw_std_corrected / (np.sqrt(s_dw_std_corrected) + self.epsilon))
+        if self.learning_std:
+            adam_dw_std_corrected = (v_dw_std_corrected / (np.sqrt(s_dw_std_corrected) + self.epsilon))
 
         # update weights
 
         # Adam algorithm
         if algorithm == 'adam':
             self.theta_mean += self.learning_rate_theta * adam_dw_mean_corrected
-            self.theta_std += self.learning_rate_theta * adam_dw_std_corrected
+            if self.learning_std:
+                self.theta_std += self.learning_rate_theta * adam_dw_std_corrected
             self.__print_algorithm(t, algorithm)
 
         # Momentum algorithm
         elif algorithm == 'momentum':
             self.theta_mean += self.learning_rate_theta * v_dw_mean_corrected
-            self.theta_std += self.learning_rate_theta * v_dw_std_corrected
+            if self.learning_std:
+                self.theta_std += self.learning_rate_theta * v_dw_std_corrected
             self.__print_algorithm(t, algorithm)
         # Regular Update
         else:
             self.theta_mean += self.learning_rate_theta * gradient_mean
-            self.theta_std += self.learning_rate_theta * gradient_std
+            if self.learning_std:
+                self.theta_std += self.learning_rate_theta * gradient_std
             self.__print_algorithm(t, algorithm)
 
         self.w_v += self.learning_rate_wv * gradient_v
+
+        if not self.learning_std:
+            gradient_std = v_dw_std_corrected = adam_dw_std_corrected = np.zeros(self.theta_std.shape)
 
         return [gradient_mean, gradient_std, v_dw_mean_corrected, v_dw_std_corrected, adam_dw_mean_corrected,
                 adam_dw_std_corrected]
@@ -157,7 +178,7 @@ class StochasticGradientAgent(Agent):
 
 class DeterministicGradientAgent(Agent):
 
-    def __init__(self, feature_shape, learning_rate_theta, learning_rate_wq, experience_size=512, batch_size=16,
+    def __init__(self, feature_shape, learning_rate_theta, learning_rate_wq, memory_size=512, batch_size=16,
                  beta1=0.9, beta2=0.999, epsilon=1e-8):
         # Actor weights
         super().__init__(learning_rate_theta)
@@ -178,9 +199,9 @@ class DeterministicGradientAgent(Agent):
         self.s_dw_mean = np.zeros(feature_shape)
 
         # Experience replay
-        self.experience = np.zeros((experience_size, 14))  # features, action
+        self.memory = np.zeros((memory_size, 14))  # features, action
         self.batch_size = batch_size
-        self.experience_size = experience_size
+        self.memory_size = memory_size
 
     def report(self, features_list):
 
@@ -199,25 +220,27 @@ class DeterministicGradientAgent(Agent):
             print('Updating weights with ' + algorithm + ' algorithm.')
 
     def store_experience(self, features, action, reward, t):
-        idx = t % self.experience_size
+        idx = t % self.memory_size
 
-        self.experience[idx, :3] = features
-        self.experience[idx, 3] = action
-        self.experience[idx, 4] = reward
-        self.experience[idx, 5:8] = self.w_q
-        self.experience[idx, 8:11] = self.theta_mean
-        self.experience[idx, 11:] = self.w_v
+        self.memory[idx, :3] = features
+        self.memory[idx, 3] = action
+        self.memory[idx, 4] = reward
+        self.memory[idx, 5:8] = self.w_q
+        self.memory[idx, 8:11] = self.theta_mean
+        self.memory[idx, 11:] = self.w_v
 
     def __sample_experience(self, t):
 
         if t < self.batch_size:
-            return self.experience[:t + 1, :]
-        elif self.batch_size <= t < self.experience_size:
-            idx = np.random.randint(low=0, high=t + 1, size=self.batch_size)
-            return self.experience[idx, :]
+            return self.memory[:t + 1, :]
+        elif self.batch_size <= t < self.memory_size:
+            idx = np.random.choice(t + 1, size=self.batch_size, replace=False)
+            # idx = np.random.randint(low=0, high=t + 1, size=self.batch_size)
+            return self.memory[idx, :]
         else:
-            idx = np.random.randint(self.experience_size, size=self.batch_size)
-            return self.experience[idx, :]
+            idx = np.random.choice(self.memory_size, size=self.batch_size, replace=False)
+            # idx = np.random.randint(self.memory_size, size=self.batch_size)
+            return self.memory[idx, :]
 
     def batch_update(self, t, algorithm='adam'):
 
