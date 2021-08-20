@@ -26,11 +26,17 @@ class PredictionMarket:
 
 class Bucket:
 
-    def __init__(self, prior_red=0.5):
+    def __init__(self, prior_red=0.5, pr_red_ball_red_bucket=2/3, pr_red_ball_blue_bucket=1/3 ):
         assert prior_red >= 0, 'Prior can not be negative!'
         assert prior_red <= 1, 'Prior can not greater than one!'
+        assert pr_red_ball_red_bucket >= 0, 'Prior can not be negative!'
+        assert pr_red_ball_red_bucket <= 1, 'Prior can not greater than one!'
+        assert pr_red_ball_blue_bucket >= 0, 'Prior can not be negative!'
+        assert pr_red_ball_blue_bucket <= 1, 'Prior can not greater than one!'
 
         self.prior_red = prior_red
+        self.pr_red_ball_red_bucket = pr_red_ball_red_bucket
+        self.pr_red_ball_blue_bucket = pr_red_ball_blue_bucket
         self.colour = np.random.choice(['red_bucket', 'blue_bucket'], p=(self.prior_red, 1 - self.prior_red))
         if self.colour == 'red_bucket':
             self.ball_list = ['red', 'red', 'blue']
@@ -38,7 +44,11 @@ class Bucket:
             self.ball_list = ['blue', 'blue', 'red']
 
     def signal(self):
-        return np.random.choice(self.ball_list)
+        if self.colour == 'red_bucket':
+            ball_distribution = (self.pr_red_ball_red_bucket, 1 - self.pr_red_ball_red_bucket)
+        else:
+            ball_distribution = (self.pr_red_ball_blue_bucket, 1 - self.pr_red_ball_blue_bucket)
+        return np.random.choice(['red', 'blue'], p=ball_distribution)
 
 
 class Explorer:
