@@ -114,8 +114,8 @@ class StochasticGradientAgent(Agent):
         batch_gradient_means = deltas * signals * ((hs - means) / np.power(stds, 2))
         if self.learning_std:
             batch_gradient_stds = deltas * signals * (np.power(hs - means, 2) / np.power(stds, 2) - 1)
-        # batch_gradient_v = deltas * signals
-        batch_gradient_v = rewards * signals
+        batch_gradient_v = deltas * signals
+        
 
         gradient_mean = np.mean(batch_gradient_means, axis=0, keepdims=True)
         if self.learning_std:
