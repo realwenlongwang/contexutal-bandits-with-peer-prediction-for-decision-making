@@ -18,7 +18,7 @@ def rewards_fig(reward_history_df, file_name):
     best_ratio = round(empirical_best / theoretical_best, 3)
     fig, axs = plt.subplots(2, figsize=(15, 8))
     axs[0].scatter(x=reward_history_df.index, y=reward_history_df['actual_reward'],label = 'Actual log rewards', marker='.', s=3)
-    axs[1].plot(not_outlier(reward_history_df.iloc[:, 1]), 'y',zorder= -99, label = 'Average reward')
+    axs[1].plot(no_outlier_array(reward_history_df.iloc[:, 1]), 'y',zorder= -99, label = 'Average reward')
     axs[0].hlines(y=np.log(2), xmin=0, xmax=reward_history_df.shape[0], colors='black', linestyles='dashdot')
     axs[0].hlines(y=0.0, xmin=0, xmax=reward_history_df.shape[0] , colors='black', linestyles='dashdot')
     axs[1].hlines(y=0.0, xmin=0, xmax=reward_history_df.shape[0] , colors='black', linestyles='dashdot')
@@ -41,7 +41,7 @@ def report_fig(report_history_df, file_name):
     plt.title('Report')
     img_dir = root_dir + file_name + '_report.png'
     plt.savefig(img_dir, dpi=150)
-    return img_dir    
+    return img_dir
 
 
 def weights_for_mean_fig(mean_weights_history_df, file_name):
@@ -120,12 +120,12 @@ def pd_table_to_fig(data, title, file_name, footer='', fig_background_color='sky
     plt.draw()
     # Create image. plt.savefig ignores figure edge and face colors, so map them.
     fig = plt.gcf()
-    
+
     img_dir = root_dir + file_name + '_' + title + '.png'
     plt.savefig(img_dir, dpi=150)
-    return img_dir     
+    return img_dir
 
-def main_loop(learning_rate_theta, learning_rate_wv, memory_size, training_episodes, fixed_std):
+def main_loop(learning_rate_theta, learning_rate_wv, memory_size, training_episodes, fixed_std, algorithm):
     # learning_rate_theta = learning_rate_theta
     # learning_rate_wv = learning_rate_wv
     # memory_size = memory_size
@@ -135,7 +135,7 @@ def main_loop(learning_rate_theta, learning_rate_wv, memory_size, training_episo
     beta1 = 0.9
     beta2 = 0.9999
     # Algorithm: adam, momentum, regular
-    algorithm = 'regular'
+    # algorithm = 'regular'
     if fixed_std != 0:
         learning_std = False
     else:
@@ -145,10 +145,10 @@ def main_loop(learning_rate_theta, learning_rate_wv, memory_size, training_episo
     pr_red_ball_red_bucket = 2/3
     pr_red_ball_blue_bucket = 1/3
 
-    agent = StochasticGradientAgent(feature_shape=[1, 3], learning_rate_theta=learning_rate_theta, 
-                                    learning_rate_wv=learning_rate_wv, 
+    agent = StochasticGradientAgent(feature_shape=[1, 3], learning_rate_theta=learning_rate_theta,
+                                    learning_rate_wv=learning_rate_wv,
                                     memory_size= memory_size, batch_size=batch_size,
-                                    beta1=beta1, beta2=beta2, 
+                                    beta1=beta1, beta2=beta2,
                                     learning_std=learning_std, fixed_std=fixed_std)
 
 
@@ -189,7 +189,7 @@ def main_loop(learning_rate_theta, learning_rate_wv, memory_size, training_episo
 
     for t in trange(training_episodes):
         bucket = Bucket(prior_red, pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
-        pm = PredictionMarket(outcomes_list=['red_bucket', 'blue_bucket'])
+        pm = PredictionMarket(prior_red=prior_red)
         signal = bucket.signal()
         x = one_hot_encode(signal)
         x.append(prior_red)
@@ -199,12 +199,12 @@ def main_loop(learning_rate_theta, learning_rate_wv, memory_size, training_episo
 
         pm.report(report)
         R = pm.log_resolve(bucket_colour_to_num[bucket.colour])
-        
+
         average_reward = average_reward + (1/ (t + 1)) * (R - average_reward)
-        
+
         mean_weights_history_list.append(agent.theta_mean[0].tolist())
         std_weights_history_list.append(agent.theta_std[0].tolist())
-        
+
         R_perf = 0
         red_score = np.log(report[0]) - np.log(0.5)
         blue_score = np.log(report[1]) - np.log(0.5)
@@ -221,7 +221,7 @@ def main_loop(learning_rate_theta, learning_rate_wv, memory_size, training_episo
         regret_history_list.append(regret)
 
         v = agent.store_experience(x, h, mean, std, R, t)
-        
+
         reward_history_list.append([R, average_reward, v, signal])
         try:
             grad_mean, grad_std, v_dw_mean_corrected, v_dw_std_corrected, \
@@ -236,17 +236,17 @@ def main_loop(learning_rate_theta, learning_rate_wv, memory_size, training_episo
             r_ball_pred_history_list.append(report[0])
             r_ball_mean_history_list.append(mean)
             r_ball_std_history_list.append(std)
-           
+
         else:
             b_ball_pred_history_list.append(report[0])
             b_ball_mean_history_list.append(mean)
             b_ball_std_history_list.append(std)
-        
+
         report_history_list.append([report[0], signal])
         mean_history_list.append([mean, signal])
         std_history_list.append([std, signal])
         grad_mean_history_list.append(grad_mean[0, :])
-        
+
         grad_r_ball_mean_history_list.append(grad_mean[0, 0])
         grad_r_ball_std_history_list.append(grad_std[0, 0])
         ##########
@@ -263,68 +263,95 @@ def main_loop(learning_rate_theta, learning_rate_wv, memory_size, training_episo
         grad_b_ball_adam_mean_history_list.append(s_dw_mean_corrected[0, 1])
         grad_b_ball_adam_std_history_list.append(s_dw_std_corrected[0, 1])
 
-    return reward_history_list, report_history_list, mean_weights_history_list, grad_mean_history_list
+    return reward_history_list, report_history_list, mean_weights_history_list, grad_mean_history_list, std_history_list[-1][0]
 
 
-def generating_report(document, learning_rate_space, memory_size_space, fixed_std_space):
+def generating_report(document, learning_rate_space, learning_rate_wv_space ,memory_size_space, fixed_std_space, algorithm_space):
 
-    for lr in learning_rate_space:
-        for ms in memory_size_space:
-            for std in fixed_std_space:
-                learning_rate_theta_string = 'learning_rate_theta: ' + str(lr)
-                memory_size_string = 'memory_size: ' + str(ms)
-                if std == 0:
-                    std_string = 'standard deviation: learnable'
-                else:
-                    std_string = 'standard deviation: ' + str(std)
+    global reward_history_list
+    for learning_rate in learning_rate_space:
+        for learning_rate_wv in learning_rate_wv_space:
+            for ms in memory_size_space:
+                for std in fixed_std_space:
+                    for algorithm in algorithm_space:
+                        if algorithm == 'adam':
+                            lr = learning_rate/25
+                            lr_wv = learning_rate_wv/35
+                        else:
+                            lr = learning_rate
+                            lr_wv = learning_rate_wv
 
-                learning_rate_p = document.add_paragraph(learning_rate_theta_string)
-                memory_size_p = document.add_paragraph(memory_size_string)
-                std_p = document.add_paragraph(std_string)
+                        learning_rate_theta_string = 'learning_rate_theta: ' + str(lr)
+                        learning_rate_wv_string = 'learning_rate_wv: ' + str(lr_wv)
+                        memory_size_string = 'memory_size: ' + str(ms)
+                        if std == 0:
+                            std_string = 'standard deviation: learnable'
+                        else:
+                            std_string = 'standard deviation: ' + str(std)
 
-                filename = 'lr' + '%.0E'%lr + '_ms' + str(ms)
-                # learning_rate_theta, learning_rate_wv, memory_size, training_episodes, fixed_std
-                try:
-                    reward_history_list, report_history_list, \
-                    mean_weights_history_list, \
-                    grad_mean_history_list = main_loop(learning_rate_theta=lr, learning_rate_wv=0, memory_size=ms, training_episodes=30000, fixed_std=std)
-                except AssertionError:
-                    document.save('report.docx')
-                    exit(1)
+                        learning_rate_p = document.add_paragraph(learning_rate_theta_string)
+                        learning_rate_wv_p = document.add_paragraph(learning_rate_wv_string)
+                        memory_size_p = document.add_paragraph(memory_size_string)
+                        std_p = document.add_paragraph(std_string)
+                        algorithm_p = document.add_paragraph(algorithm)
 
-                reward_history_df = pd.DataFrame(reward_history_list, columns=['actual_reward', 'average_reward', 'estimated_reward', 'signal'])
-                report_history_df = pd.DataFrame(report_history_list, columns=['report', 'signal'])
-                grad_mean_history_df = pd.DataFrame(grad_mean_history_list, columns=['red_ball', 'blue_ball', 'prior'])
-                mean_weights_history_df = pd.DataFrame(mean_weights_history_list, columns=['red_weight', 'blue_weight', 'prior_weight'])
+                        filename = 'lr' + '%.0E'%lr + '_v' + '%.0E'%lr_wv + '_ms' + str(ms) + '_std' + str(std)
+                        # learning_rate_theta, learning_rate_wv, memory_size, training_episodes, fixed_std
+
+                        try:
+                            reward_history_list, report_history_list, \
+                            mean_weights_history_list, \
+                            grad_mean_history_list, final_std = main_loop(learning_rate_theta=lr,
+                                                               learning_rate_wv=lr_wv,
+                                                               memory_size=ms,
+                                                               training_episodes=300000,
+                                                               fixed_std=std,
+                                                               algorithm=algorithm
+                                                               )
+                        except AssertionError:
+                            document.save('report.docx')
+                            exit(1)
+
+                        if std == 0:
+                            std_p.add_run(' final std: ' + str(final_std))
+
+                        reward_history_df = pd.DataFrame(reward_history_list, columns=['actual_reward', 'average_reward', 'estimated_reward', 'signal'])
+                        report_history_df = pd.DataFrame(report_history_list, columns=['report', 'signal'])
+                        grad_mean_history_df = pd.DataFrame(grad_mean_history_list, columns=['red_ball', 'blue_ball', 'prior'])
+                        mean_weights_history_df = pd.DataFrame(mean_weights_history_list, columns=['red_weight', 'blue_weight', 'prior_weight'])
 
 
-                reward_img_dir, best_ratio = rewards_fig(reward_history_df=reward_history_df, file_name=filename)
-                report_img_dir = report_fig(report_history_df=report_history_df, file_name=filename)
-                weights_img_dir = weights_for_mean_fig(mean_weights_history_df=mean_weights_history_df, file_name=filename)
-                gradients_for_mean_img_dir = gradients_for_mean_fig(grad_mean_history_df=grad_mean_history_df,
-                                                                    file_name=filename)
-                successive_grad_dot_product_img_dir = successive_gradients_dot_product(grad_mean_history_df=grad_mean_history_df,
-                                                                                        file_name=filename,
-                                                                                        moving_size=1000
-                                                                                        )
+                        reward_img_dir, best_ratio = rewards_fig(reward_history_df=reward_history_df, file_name=filename)
+                        report_img_dir = report_fig(report_history_df=report_history_df, file_name=filename)
+                        weights_img_dir = weights_for_mean_fig(mean_weights_history_df=mean_weights_history_df, file_name=filename)
+                        gradients_for_mean_img_dir = gradients_for_mean_fig(grad_mean_history_df=grad_mean_history_df,
+                                                                            file_name=filename)
+                        successive_grad_dot_product_img_dir = successive_gradients_dot_product(grad_mean_history_df=grad_mean_history_df,
+                                                                                                file_name=filename,
+                                                                                                moving_size=1000
+                                                                                                )
+                        query_index = mean_weights_history_df.shape[0]//3
+                        mean_grad_summary_img_dir = pd_table_to_fig(data=grad_mean_history_df.iloc[-query_index:, :].describe(), title='mean_gradients_history_summary', file_name=filename)
+                        mean_weights_summary_img_dir = pd_table_to_fig(data=mean_weights_history_df.iloc[-query_index:, :].describe(), title='mean_weights_history_summary', file_name=filename)
 
-                mean_weights_summary_img_dir = pd_table_to_fig(data=mean_weights_history_df.describe(), title='mean_weights_history_summary', file_name=filename)
-
-                document.add_picture(reward_img_dir, width=Cm(15.0))
-                document.add_picture(report_img_dir, width=Cm(15.0))
-                document.add_picture(weights_img_dir, width=Cm(15.0))
-                document.add_picture(gradients_for_mean_img_dir, width=Cm(15.0))
-                document.add_picture(successive_grad_dot_product_img_dir, width=Cm(15.0))
-                document.add_picture(mean_weights_summary_img_dir, width=Cm(15.0))
+                        document.add_picture(reward_img_dir, width=Cm(15.0))
+                        document.add_picture(report_img_dir, width=Cm(15.0))
+                        document.add_picture(weights_img_dir, width=Cm(15.0))
+                        document.add_picture(gradients_for_mean_img_dir, width=Cm(15.0))
+                        document.add_picture(successive_grad_dot_product_img_dir, width=Cm(15.0))
+                        document.add_picture(mean_grad_summary_img_dir, width=Cm(15.0))
+                        document.add_picture(mean_weights_summary_img_dir, width=Cm(15.0))
 
     return document
 
 
 if __name__ == '__main__':
 
-    learning_rate_space = [3e-3]#[3e-4, 1e-3, 3e-3] # 1e-2 seems too high
-    memory_size_space = [2**10]#[2 ** 9, 2 ** 10, 2 ** 11, 2 ** 12, 2 ** 13]
-    std_space = [0.3]#[0, 0.1, 0.2, 0.3] # 0 means learning the standard deviation
+    learning_rate_space = [3e-4, 1e-3] # 3e-3, 1e-2 seems too high for regular algorithm
+    learning_rate_wv_space = [0, 1e-4]
+    memory_size_space = [2 ** 9, 2 ** 13]
+    std_space = [0, 0.3] # 0 means learning the standard deviation
+    algorithm_space = ['regular', 'momentum', 'adam']
     # baseline comparison, training iteration dependent on learning rate.
 
 
@@ -337,7 +364,11 @@ if __name__ == '__main__':
 
 
     document.add_heading('Actual reward', level=1)
-    document = generating_report(document=document, learning_rate_space=learning_rate_space, memory_size_space=memory_size_space, fixed_std_space=std_space)
+    document = generating_report(document=document, learning_rate_space=learning_rate_space,
+                                 learning_rate_wv_space=learning_rate_wv_space,
+                                 memory_size_space=memory_size_space, fixed_std_space=std_space,
+                                 algorithm_space=algorithm_space
+                                 )
 
 
-    document.save('report.docx')
+    document.save('stochastic_report.docx')
