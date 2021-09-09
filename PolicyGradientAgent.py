@@ -68,8 +68,14 @@ class StochasticGradientAgent(Agent):
 
         return h, mean, std
 
-    def __print_algorithm(self, t, algorithm):
+    def __print_info(self, t, algorithm):
         if t == 0:
+            print('learning_rate_theta=', self.learning_rate_theta, ' learning_rate_wv=', self.learning_rate_wv)
+            if self.learning_std:
+                std_string = 'learnable'
+            else:
+                std_string = str(self.fixed_std)
+            print('memory_size=', self.memory_size, ' standard deviation=', std_string)
             print('Updating weights with ' + algorithm + ' algorithm.')
 
     def store_experience(self, features, h, mean, std, reward, t):
@@ -152,20 +158,21 @@ class StochasticGradientAgent(Agent):
             self.theta_mean += self.learning_rate_theta * adam_dw_mean_corrected
             if self.learning_std:
                 self.theta_std += self.learning_rate_theta * adam_dw_std_corrected
-            self.__print_algorithm(t, algorithm)
+
 
         # Momentum algorithm
         elif algorithm == 'momentum':
             self.theta_mean += self.learning_rate_theta * v_dw_mean_corrected
             if self.learning_std:
                 self.theta_std += self.learning_rate_theta * v_dw_std_corrected
-            self.__print_algorithm(t, algorithm)
+
         # Regular Update
         else:
             self.theta_mean += self.learning_rate_theta * gradient_mean
             if self.learning_std:
                 self.theta_std += self.learning_rate_theta * gradient_std
-            self.__print_algorithm(t, algorithm)
+        self.__print_info(t, algorithm)
+
 
         self.w_v += self.learning_rate_wv * gradient_v
 
@@ -178,7 +185,7 @@ class StochasticGradientAgent(Agent):
 
 class DeterministicGradientAgent(Agent):
 
-    def __init__(self, feature_shape, learning_rate_theta, learning_rate_wq, memory_size=512, batch_size=16,
+    def __init__(self, feature_shape, learning_rate_theta, learning_rate_wv, learning_rate_wq, memory_size=512, batch_size=16,
                  beta1=0.9, beta2=0.999, epsilon=1e-8):
         # Actor weights
         super().__init__(learning_rate_theta)
@@ -187,6 +194,7 @@ class DeterministicGradientAgent(Agent):
         # Critic weights
         self.w_q = np.zeros(feature_shape)
         self.w_v = np.zeros(feature_shape)
+        self.learning_rate_wv = learning_rate_wv
         self.learning_rate_wq = learning_rate_wq
 
         # Momentum variables
@@ -215,8 +223,10 @@ class DeterministicGradientAgent(Agent):
 
         return mean
 
-    def __print_algorithm(self, t, algorithm):
+    def __print_info(self, t, algorithm):
         if t == 0:
+            print('learning_rate_theta=', self.learning_rate_theta, ' learning_rate_wq=', self.learning_rate_wq)
+            print('memory_size=', self.memory_size)
             print('Updating weights with ' + algorithm + ' algorithm.')
 
     def store_experience(self, features, action, reward, t):
@@ -234,11 +244,11 @@ class DeterministicGradientAgent(Agent):
         if t < self.batch_size:
             return self.memory[:t + 1, :]
         elif self.batch_size <= t < self.memory_size:
-            idx = np.random.choice(t + 1, size=self.batch_size, replace=False)
+            idx = np.random.choice(t + 1, size=self.batch_size, replace=True)  # True means a value can be selected multiple times
             # idx = np.random.randint(low=0, high=t + 1, size=self.batch_size)
             return self.memory[idx, :]
         else:
-            idx = np.random.choice(self.memory_size, size=self.batch_size, replace=False)
+            idx = np.random.choice(self.memory_size, size=self.batch_size, replace=True)
             # idx = np.random.randint(self.memory_size, size=self.batch_size)
             return self.memory[idx, :]
 
@@ -293,21 +303,20 @@ class DeterministicGradientAgent(Agent):
         # Adam algorithm
         if algorithm == 'adam':
             self.theta_mean += self.learning_rate_theta * adam_dw_mean_corrected
-            self.__print_algorithm(t, algorithm)
 
         # Momentum algorithm
         elif algorithm == 'momentum':
             self.theta_mean += self.learning_rate_theta * v_dw_mean_corrected
-            self.__print_algorithm(t, algorithm)
+
         # Regular Update
         else:
             self.theta_mean += self.learning_rate_theta * gradient_mean
-            self.__print_algorithm(t, algorithm)
 
+        self.__print_info(t, algorithm)
         self.w_q += self.learning_rate_wq * gradient_q
-        self.w_v += self.learning_rate_wq * gradient_v
+        self.w_v += self.learning_rate_wv * gradient_v
 
         q = np.mean(qs)
         v = np.mean(vs)
 
-        return [gradient_mean, v_dw_mean_corrected, adam_dw_mean_corrected, q, v]
+        return [gradient_mean, gradient_v, gradient_q, v_dw_mean_corrected, adam_dw_mean_corrected, v, q]
