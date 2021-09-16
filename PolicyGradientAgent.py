@@ -1,7 +1,6 @@
 import numpy as np
 
 
-
 def gaussian(x, mu, sigma):
     return np.exp(-np.power(x - mu, 2.) / (2 * np.power(sigma, 2.)))
 
@@ -20,7 +19,7 @@ class Agent:
 class StochasticGradientAgent(Agent):
 
     def __init__(self, feature_shape, learning_rate_theta, learning_rate_wv, memory_size=512, batch_size=16,
-                 beta1=0.9, beta2=0.999, epsilon=1e-8, learning_std = True, fixed_std = 1.0):
+                 beta1=0.9, beta2=0.999, epsilon=1e-8, learning_std=True, fixed_std=1.0):
         # Actor weights
         super().__init__(learning_rate_theta)
         self.theta_mean = np.zeros(feature_shape)
@@ -46,8 +45,6 @@ class StochasticGradientAgent(Agent):
         self.memory = np.zeros((memory_size, feature_shape[1] + 6))
         self.batch_size = batch_size
         self.memory_size = memory_size
-
-
 
     def report(self, features_list):
 
@@ -98,7 +95,7 @@ class StochasticGradientAgent(Agent):
         if t < self.batch_size:
             return self.memory[:t + 1, :]
         elif self.batch_size <= t < self.memory_size:
-            idx = np.random.choice(t+1, size=self.batch_size, replace=False)
+            idx = np.random.choice(t + 1, size=self.batch_size, replace=False)
             # idx = np.random.randint(low=0, high=t + 1, size=self.batch_size) # with replacement but faster
             return self.memory[idx, :]
         else:
@@ -121,7 +118,6 @@ class StochasticGradientAgent(Agent):
         if self.learning_std:
             batch_gradient_stds = deltas * signals * (np.power(hs - means, 2) / np.power(stds, 2) - 1)
         batch_gradient_v = deltas * signals
-        
 
         gradient_mean = np.mean(batch_gradient_means, axis=0, keepdims=True)
         if self.learning_std:
@@ -173,7 +169,6 @@ class StochasticGradientAgent(Agent):
                 self.theta_std += self.learning_rate_theta * gradient_std
         self.__print_info(t, algorithm)
 
-
         self.w_v += self.learning_rate_wv * gradient_v
 
         if not self.learning_std:
@@ -185,7 +180,8 @@ class StochasticGradientAgent(Agent):
 
 class DeterministicGradientAgent(Agent):
 
-    def __init__(self, feature_shape, learning_rate_theta, learning_rate_wv, learning_rate_wq, memory_size=512, batch_size=16,
+    def __init__(self, feature_shape, learning_rate_theta, learning_rate_wv, learning_rate_wq, memory_size=512,
+                 batch_size=16,
                  beta1=0.9, beta2=0.999, epsilon=1e-8):
         # Actor weights
         super().__init__(learning_rate_theta)
@@ -232,19 +228,28 @@ class DeterministicGradientAgent(Agent):
     def store_experience(self, features, action, reward, t):
         idx = t % self.memory_size
 
+        theta = np.dot(features, self.theta_mean.T)
+        phis = (action - theta) * features
+
+        v = np.dot(features, self.w_v.T)
+        q = np.dot(phis, self.w_q.T) + v
+
         self.memory[idx, :3] = features
-        self.memory[idx, 3] = action
-        self.memory[idx, 4] = reward
-        self.memory[idx, 5:8] = self.w_q
-        self.memory[idx, 8:11] = self.theta_mean
-        self.memory[idx, 11:] = self.w_v
+        self.memory[idx, 3:6] = phis
+        self.memory[idx, 6] = reward - q
+        self.memory[idx, 7:10] = self.w_q
+        # self.memory[idx, 8:11] = self.theta_mean
+        # self.memory[idx, 11:] = self.w_v
+
+        return [v, q]
 
     def __sample_experience(self, t):
 
         if t < self.batch_size:
             return self.memory[:t + 1, :]
         elif self.batch_size <= t < self.memory_size:
-            idx = np.random.choice(t + 1, size=self.batch_size, replace=True)  # True means a value can be selected multiple times
+            idx = np.random.choice(t + 1, size=self.batch_size,
+                                   replace=True)  # True means a value can be selected multiple times
             # idx = np.random.randint(low=0, high=t + 1, size=self.batch_size)
             return self.memory[idx, :]
         else:
@@ -257,29 +262,16 @@ class DeterministicGradientAgent(Agent):
         experience_batch = self.__sample_experience(t)
 
         signals = experience_batch[:, :3]
-        actions = experience_batch[:, [3]]
-        rewards = experience_batch[:, [4]]
-        w_qs = experience_batch[:, 5:8]
-        theta_means = experience_batch[:, 8:11]
-        w_vs = experience_batch[:, 11:]
-
-        thetas = np.sum(signals * theta_means, axis=1, keepdims=True)
-        # thetas = np.dot(signals, self.theta_mean.T)
-        phis = (actions - thetas) * signals
-
-        vs = np.sum(signals * w_vs, axis=1, keepdims=True)
-        # vs = np.dot(signals, self.w_v.T)
-        qs = np.sum(phis * w_qs, axis=1, keepdims=True) + vs
-        # qs = np.dot(phis, self.w_q.T) + vs
-
-        deltas = rewards - qs
-        deltas2 = rewards - qs
+        phis = experience_batch[:, 3:6]
+        deltas = experience_batch[:, [6]]
+        w_qs = experience_batch[:, 7:10]
 
         # batch_gradient_means = signals * np.sum(signals * w_qs, axis=1, keepdims=True)
         # batch_gradient_means = signals * np.dot(signals, self.w_q.T)
-        batch_gradient_means = w_qs  # Natural gradient
+        # batch_gradient_means = w_qs  # Natural gradient
+        batch_gradient_means = self.w_q
         batch_gradient_q = deltas * phis
-        batch_gradient_v = deltas2 * signals
+        batch_gradient_v = deltas * signals
 
         gradient_mean = np.mean(batch_gradient_means, axis=0, keepdims=True)
         gradient_q = np.mean(batch_gradient_q, axis=0, keepdims=True)
@@ -316,7 +308,4 @@ class DeterministicGradientAgent(Agent):
         self.w_q += self.learning_rate_wq * gradient_q
         self.w_v += self.learning_rate_wv * gradient_v
 
-        q = np.mean(qs)
-        v = np.mean(vs)
-
-        return [gradient_mean, gradient_v, gradient_q, v_dw_mean_corrected, adam_dw_mean_corrected, v, q]
+        return [gradient_mean, gradient_v, gradient_q, v_dw_mean_corrected, adam_dw_mean_corrected]

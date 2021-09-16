@@ -1,6 +1,8 @@
 import numpy as np
 from scipy.special import expit
 from scipy import stats
+import pandas as pd
+import matplotlib.pyplot as plt
 
 
 class PredictionMarket:
@@ -159,6 +161,27 @@ def one_hot_encode(feature):
         return [1, 0]
     else:
         return [0, 1]
+
+
+def gradients_box_plot(df, bins, col_name, color, ax):
+    _df = df.copy()
+    _df['bin']=pd.cut(_df.index.to_series(), bins=bins, include_lowest=True)
+
+    box_list = []
+    for interval in _df['bin'].unique():
+        box_list.append(_df.loc[_df['bin'] == interval, col_name].values)
+    bplot = ax.boxplot(box_list, patch_artist=True, notch=True, vert=True, meanline=False, zorder=-99, showmeans=True)
+    left, right = ax.get_xlim()
+    ax.hlines(y=0, xmin=left, xmax=right, linestyles='dashdot', zorder=-98, color='black')
+    for patch in bplot['boxes']:
+        patch.set_facecolor(color)
+    ax.yaxis.grid(True)
+    ax.set_xticklabels(labels=_df['bin'].unique(),rotation=15)
+    ax.set_title(col_name)
+
+def gradients_box_subplot(df, column_list, colour_list, axs):
+    for col_name, ax, colour in zip(column_list, axs, colour_list):
+        gradients_box_plot(df, bins=10, col_name=col_name, color=colour, ax=ax)
 
 
 bucket_colour_to_num = {'red_bucket': 0, 'blue_bucket': 1}

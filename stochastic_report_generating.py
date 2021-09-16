@@ -8,52 +8,69 @@ from PolicyGradientAgent import StochasticGradientAgent
 import traceback
 from sys import exit
 from scipy.ndimage import uniform_filter1d
+from scipy.special import logit, expit
 import pandas as pd
 
 root_dir = 'plots/'
 
 def rewards_fig(reward_history_df, file_name):
-    theoretical_best = 2 / 3 * (np.log(2 / 3) - np.log(1 / 2)) + 1 / 3 * (np.log(1 / 3) - np.log(1 / 2))
-    empirical_best = reward_history_df.iloc[-100:, 1].mean()
-    best_ratio = round(empirical_best / theoretical_best, 3)
-    fig, axs = plt.subplots(2, figsize=(15, 8))
-    axs[0].scatter(x=reward_history_df.index, y=reward_history_df['actual_reward'],label = 'Actual log rewards', marker='.', s=3)
-    axs[1].plot(no_outlier_array(reward_history_df.iloc[:, 1]), 'y',zorder= -99, label = 'Average reward')
-    axs[0].hlines(y=np.log(2), xmin=0, xmax=reward_history_df.shape[0], colors='black', linestyles='dashdot')
-    axs[0].hlines(y=0.0, xmin=0, xmax=reward_history_df.shape[0] , colors='black', linestyles='dashdot')
-    axs[1].hlines(y=0.0, xmin=0, xmax=reward_history_df.shape[0] , colors='black', linestyles='dashdot')
-    for signal, df in reward_history_df.reset_index().groupby('signal'):
-        axs[1].scatter(x=df['index'], y=df['estimated_reward'], label='Estimated reward ' + signal, marker='.', c=signal, s=3)
-    axs[1].hlines(y=theoretical_best, xmin=0, xmax=reward_history_df.shape[0] , colors='black', linestyles='dashdot')
+    fig, axs = plt.subplots(3, figsize=(15, 8))
+    axs[0].scatter(x=reward_history_df.index, y=reward_history_df['actual_reward'], label='Actual log rewards',
+                   marker='.', s=3)
+    axs[1].plot(no_outlier_array(reward_history_df.iloc[:, 1]), 'y', zorder=-99, label='Average reward')
+    axs[2].plot(reward_history_df['max_expected_reward'] - reward_history_df['expected_reward'], 'g.', label='Regret')
+    axs[0].hlines(y=0.0, xmin=0, xmax=reward_history_df.shape[0], colors='black', linestyles='dashdot')
+    axs[1].hlines(y=0.0, xmin=0, xmax=reward_history_df.shape[0], colors='black', linestyles='dashdot')
+    for signal, df in reward_history_df.reset_index().groupby('prior_red'):
+        axs[1].scatter(x=df['index'], y=df['estimated_reward'], label='Estimated reward ' + str(signal), marker='.',
+                       s=3)
     fig.legend()
-    fig.suptitle('Actual Rewards and Average; Towards best ratio: %.3f'%best_ratio)
+    fig.suptitle('Actual Rewards and Average')
     img_dir = root_dir + file_name + '_reward.png'
     plt.savefig(img_dir, dpi=150)
-    return img_dir, best_ratio
+    return img_dir
 
-def report_fig(report_history_df, file_name):
+def report_fig(report_history_df, prior_red_list, pr_red_ball_red_bucket, pr_red_ball_blue_bucket,file_name):
     fig, ax = plt.subplots(figsize=(15, 4))
     for signal, df in report_history_df.reset_index().groupby('signal'):
-        ax.scatter(x=df['index'], y=df['report'], label=signal, marker='.', c=signal, s=3)
-    ax.hlines(y=2/3, xmin=0, xmax=len(report_history_df), colors='black', linestyles='dashdot')
-    ax.hlines(y=1/3, xmin=0, xmax=len(report_history_df) , colors='black', linestyles='dashdot')
-    ax.legend()
+        ax.scatter(x=df['index'], y=df['report'], label=signal, marker='.', c=signal, s=3, zorder=-99)
+    for prior_red in prior_red_list:
+        plt.hlines(
+            y=analytical_best_report_ru_rs(
+                pr_ru=prior_red,
+                pr_rs_ru=pr_red_ball_red_bucket,
+                pr_rs_bu=pr_red_ball_blue_bucket
+            ), xmin=0, xmax=len(report_history_df), colors='black', linestyles='dashdot', zorder=-98)
+
+        plt.hlines(
+            y=analytical_best_report_ru_bs(
+                pr_ru=prior_red,
+                pr_bs_ru=1 - pr_red_ball_red_bucket,
+                pr_bs_bu=1 - pr_red_ball_blue_bucket
+            ), xmin=0, xmax=len(report_history_df), colors='black', linestyles='dashdot', zorder=-98)
+    ax.legend(loc='lower left')
     plt.title('Report')
     img_dir = root_dir + file_name + '_report.png'
     plt.savefig(img_dir, dpi=150)
     return img_dir
 
 
-def weights_for_mean_fig(mean_weights_history_df, file_name):
+def weights_for_mean_fig(mean_weights_history_df, file_name, pr_red_ball_red_bucket, pr_red_ball_blue_bucket):
     fig = plt.figure(figsize=(15, 4))
     plt.plot(mean_weights_history_df.iloc[1:, 0], 'r', label='Red weight')
     plt.plot(mean_weights_history_df.iloc[1:, 1], label='Blue weight')
     plt.plot(mean_weights_history_df.iloc[1:, 2], 'g', label='Prior weight')
-    plt.hlines(y=np.log(2), xmin=0, xmax=len(mean_weights_history_df), colors='red', linestyles='dashdot')
-    plt.annotate('%.3f'%np.log(2), xy=(len(mean_weights_history_df)/2, np.log(2)), xytext=(len(mean_weights_history_df)/2, np.log(2)/2), arrowprops=dict(arrowstyle="->"))
-    plt.hlines(y=np.log(1/2), xmin=0, xmax=len(mean_weights_history_df) , colors='blue', linestyles='dashdot')
-    plt.annotate('%.3f'%np.log(1/2), xy=(len(mean_weights_history_df)/2, np.log(1/2)), xytext=(len(mean_weights_history_df)/2, np.log(1/2)/2), arrowprops=dict(arrowstyle="->"))
-    plt.hlines(y=0, xmin=0, xmax=len(mean_weights_history_df) , colors='green', linestyles='dashdot')
+    plt.hlines(y=logit(pr_red_ball_red_bucket), xmin=0, xmax=len(mean_weights_history_df), colors='red',
+               linestyles='dashdot')
+    plt.annotate('%.3f' % logit(pr_red_ball_red_bucket),
+                 xy=(len(mean_weights_history_df) / 2, logit(pr_red_ball_red_bucket)),
+                 xytext=(len(mean_weights_history_df) / 2, np.log(2) / 2), arrowprops=dict(arrowstyle="->"))
+    plt.hlines(y=logit(pr_red_ball_blue_bucket), xmin=0, xmax=len(mean_weights_history_df), colors='blue',
+               linestyles='dashdot')
+    plt.annotate('%.3f' % logit(pr_red_ball_blue_bucket),
+                 xy=(len(mean_weights_history_df) / 2, logit(pr_red_ball_blue_bucket)),
+                 xytext=(len(mean_weights_history_df) / 2, np.log(1 / 2) / 2), arrowprops=dict(arrowstyle="->"))
+    plt.hlines(y=1, xmin=0, xmax=len(mean_weights_history_df), colors='green', linestyles='dashdot')
     # for coord in phase_change_coordinates(mark_index, mean_weights_history_df):
     #     plt.annotate('change', xy=coord, xytext=(coord[0], 0.1), arrowprops=dict(arrowstyle="->"))
     plt.legend()
@@ -125,7 +142,7 @@ def pd_table_to_fig(data, title, file_name, footer='', fig_background_color='sky
     plt.savefig(img_dir, dpi=150)
     return img_dir
 
-def main_loop(learning_rate_theta, learning_rate_wv, memory_size, training_episodes, fixed_std, algorithm):
+def main_loop(learning_rate_theta, learning_rate_wv, memory_size, training_episodes, fixed_std, algorithm, prior_red_list=[1/2, 1/2], pr_red_ball_red_bucket=2/3,  pr_red_ball_blue_bucket=1/3):
     # learning_rate_theta = learning_rate_theta
     # learning_rate_wv = learning_rate_wv
     # memory_size = memory_size
@@ -141,19 +158,17 @@ def main_loop(learning_rate_theta, learning_rate_wv, memory_size, training_episo
     else:
         learning_std = True
     # Bucket parameters
-    prior_red = 0.5
+    prior_red_list = [3/4, 1/4]
     pr_red_ball_red_bucket = 2/3
     pr_red_ball_blue_bucket = 1/3
 
     agent = StochasticGradientAgent(feature_shape=[1, 3], learning_rate_theta=learning_rate_theta,
                                     learning_rate_wv=learning_rate_wv,
-                                    memory_size= memory_size, batch_size=batch_size,
+                                    memory_size=memory_size, batch_size=batch_size,
                                     beta1=beta1, beta2=beta2,
                                     learning_std=learning_std, fixed_std=fixed_std)
 
-
     reward_history_list = []
-    regret_history_list = []
     average_reward = 0
 
     mean_weights_history_list = []
@@ -188,11 +203,13 @@ def main_loop(learning_rate_theta, learning_rate_wv, memory_size, training_episo
     report_history_list = []
 
     for t in trange(training_episodes):
+        prior_red = np.random.choice(prior_red_list)
+        #     prior_red = np.random.uniform()
         bucket = Bucket(prior_red, pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
         pm = PredictionMarket(prior_red=prior_red)
         signal = bucket.signal()
         x = one_hot_encode(signal)
-        x.append(prior_red)
+        x.append(logit(prior_red))
         h, mean, std = agent.report(x)
         pi = expit(h)
         report = [pi, 1 - pi]
@@ -200,32 +217,36 @@ def main_loop(learning_rate_theta, learning_rate_wv, memory_size, training_episo
         pm.report(report)
         R = pm.log_resolve(bucket_colour_to_num[bucket.colour])
 
-        average_reward = average_reward + (1/ (t + 1)) * (R - average_reward)
+        average_reward = average_reward + (1 / (t + 1)) * (R - average_reward)
 
         mean_weights_history_list.append(agent.theta_mean[0].tolist())
         std_weights_history_list.append(agent.theta_std[0].tolist())
 
-        R_perf = 0
-        red_score = np.log(report[0]) - np.log(0.5)
-        blue_score = np.log(report[1]) - np.log(0.5)
-        red_expectation = pr_red_ball_red_bucket  * red_score + (1 - pr_red_ball_red_bucket)  * blue_score
-        blue_expectation = pr_red_ball_blue_bucket  * red_score + (1 - pr_red_ball_blue_bucket)  * blue_score
-        red_max_expectation = pr_red_ball_red_bucket * (np.log(pr_red_ball_red_bucket) - np.log(0.5)) + (1 - pr_red_ball_red_bucket) * (np.log(1 - pr_red_ball_red_bucket) - np.log(0.5))
-        blue_max_expectation = pr_red_ball_blue_bucket * (np.log(pr_red_ball_blue_bucket) - np.log(0.5)) + (1 - pr_red_ball_blue_bucket) * (np.log(1 - pr_red_ball_blue_bucket) - np.log(0.5))
+        actual_pr_ru_S = 0
+        expected_log_reward = 0
+        max_expected_log_reward = 0
+        regret = 0
         if signal == 'red':
-            R_perf = red_expectation
-            regret = red_max_expectation - red_expectation
+            actual_pr_ru_S = analytical_best_report_ru_rs(pr_ru=prior_red, pr_rs_ru=pr_red_ball_red_bucket,
+                                                          pr_rs_bu=pr_red_ball_blue_bucket)
+            expected_log_reward = expected_log_reward_red_ball(actual_pr_ru_rs=actual_pr_ru_S, estimated_pr_ru_rs=pi,
+                                                               pr_ru=prior_red)
+            max_expected_log_reward = expected_log_reward_red_ball(actual_pr_ru_rs=actual_pr_ru_S,
+                                                                   estimated_pr_ru_rs=actual_pr_ru_S, pr_ru=prior_red)
         else:
-            R_perf = blue_expectation
-            regret = blue_max_expectation - blue_expectation
-        regret_history_list.append(regret)
+            actual_pr_ru_S = analytical_best_report_ru_bs(pr_ru=prior_red, pr_bs_ru=1 - pr_red_ball_red_bucket,
+                                                          pr_bs_bu=1 - pr_red_ball_blue_bucket)
+            expected_log_reward = expected_log_reward_blue_ball(actual_pr_ru_bs=actual_pr_ru_S, estimated_pr_ru_bs=pi,
+                                                                pr_ru=prior_red)
+            max_expected_log_reward = expected_log_reward_blue_ball(actual_pr_ru_bs=actual_pr_ru_S,
+                                                                    estimated_pr_ru_bs=actual_pr_ru_S, pr_ru=prior_red)
 
         v = agent.store_experience(x, h, mean, std, R, t)
 
-        reward_history_list.append([R, average_reward, v, signal])
+        reward_history_list.append([R, average_reward, v, expected_log_reward, max_expected_log_reward, signal, prior_red])
         try:
             grad_mean, grad_std, v_dw_mean_corrected, v_dw_std_corrected, \
-            s_dw_mean_corrected, s_dw_std_corrected = agent.batch_update(t, algorithm= algorithm)
+            s_dw_mean_corrected, s_dw_std_corrected = agent.batch_update(t, algorithm=algorithm)
         except AssertionError:
             tb = traceback.format_exc()
             print(tb)
@@ -281,6 +302,9 @@ def generating_report(document, learning_rate_space, learning_rate_wv_space ,mem
                             lr = learning_rate
                             lr_wv = learning_rate_wv
 
+                        prior_red_list=[3/4, 1/4]
+                        pr_red_ball_red_bucket = 2 / 3
+                        pr_red_ball_blue_bucket = 1 / 3
                         learning_rate_theta_string = 'learning_rate_theta: ' + str(lr)
                         learning_rate_wv_string = 'learning_rate_wv: ' + str(lr_wv)
                         memory_size_string = 'memory_size: ' + str(ms)
@@ -301,13 +325,17 @@ def generating_report(document, learning_rate_space, learning_rate_wv_space ,mem
                         try:
                             reward_history_list, report_history_list, \
                             mean_weights_history_list, \
-                            grad_mean_history_list, final_std = main_loop(learning_rate_theta=lr,
-                                                               learning_rate_wv=lr_wv,
-                                                               memory_size=ms,
-                                                               training_episodes=300000,
-                                                               fixed_std=std,
-                                                               algorithm=algorithm
-                                                               )
+                            grad_mean_history_list, final_std = main_loop(
+                                learning_rate_theta=lr,
+                                learning_rate_wv=lr_wv,
+                                memory_size=ms,
+                                training_episodes=900000 * 2,
+                                fixed_std=std,
+                                algorithm=algorithm,
+                                prior_red_list=prior_red_list,
+                                pr_red_ball_red_bucket=pr_red_ball_red_bucket,
+                                pr_red_ball_blue_bucket=pr_red_ball_blue_bucket
+                            )
                         except AssertionError:
                             document.save('report.docx')
                             exit(1)
@@ -315,15 +343,26 @@ def generating_report(document, learning_rate_space, learning_rate_wv_space ,mem
                         if std == 0:
                             std_p.add_run(' final std: ' + str(final_std))
 
-                        reward_history_df = pd.DataFrame(reward_history_list, columns=['actual_reward', 'average_reward', 'estimated_reward', 'signal'])
+                        reward_history_df = pd.DataFrame(reward_history_list, columns=['actual_reward', 'average_reward', 'estimated_reward', 'expected_reward', 'max_expected_reward','signal', 'prior_red'])
                         report_history_df = pd.DataFrame(report_history_list, columns=['report', 'signal'])
                         grad_mean_history_df = pd.DataFrame(grad_mean_history_list, columns=['red_ball', 'blue_ball', 'prior'])
                         mean_weights_history_df = pd.DataFrame(mean_weights_history_list, columns=['red_weight', 'blue_weight', 'prior_weight'])
 
 
-                        reward_img_dir, best_ratio = rewards_fig(reward_history_df=reward_history_df, file_name=filename)
-                        report_img_dir = report_fig(report_history_df=report_history_df, file_name=filename)
-                        weights_img_dir = weights_for_mean_fig(mean_weights_history_df=mean_weights_history_df, file_name=filename)
+                        reward_img_dir = rewards_fig(reward_history_df=reward_history_df, file_name=filename)
+                        report_img_dir = report_fig(
+                            report_history_df=report_history_df,
+                            file_name=filename,
+                            prior_red_list=prior_red_list,
+                            pr_red_ball_red_bucket=pr_red_ball_red_bucket,
+                            pr_red_ball_blue_bucket=pr_red_ball_blue_bucket
+                        )
+                        weights_img_dir = weights_for_mean_fig(
+                            mean_weights_history_df=mean_weights_history_df,
+                            file_name=filename,
+                            pr_red_ball_red_bucket=pr_red_ball_red_bucket,
+                            pr_red_ball_blue_bucket=pr_red_ball_blue_bucket
+                        )
                         gradients_for_mean_img_dir = gradients_for_mean_fig(grad_mean_history_df=grad_mean_history_df,
                                                                             file_name=filename)
                         successive_grad_dot_product_img_dir = successive_gradients_dot_product(grad_mean_history_df=grad_mean_history_df,
@@ -347,10 +386,10 @@ def generating_report(document, learning_rate_space, learning_rate_wv_space ,mem
 
 if __name__ == '__main__':
 
-    learning_rate_space = [3e-4, 1e-3] # 3e-3, 1e-2 seems too high for regular algorithm
-    learning_rate_wv_space = [0, 1e-4]
-    memory_size_space = [2 ** 9, 2 ** 13]
-    std_space = [0, 0.3] # 0 means learning the standard deviation
+    learning_rate_space = [3e-5, 1e-4, 3e-4] # 3e-3, 1e-2 seems too high for regular algorithm
+    learning_rate_wv_space = [0]
+    memory_size_space = [1024]
+    std_space = [0.3, 0] # 0 means learning the standard deviation
     algorithm_space = ['regular', 'momentum', 'adam']
     # baseline comparison, training iteration dependent on learning rate.
 
