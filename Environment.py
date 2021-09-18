@@ -9,15 +9,17 @@ class PredictionMarket:
 
     def __init__(self, prior_red):
         self.init_prediction = prior_red
-        self.current_prediction = self.init_prediction
+        self.current_prediction = self.init_prediction.copy()
+        self.previous_prediction = self.current_prediction.copy()
 
     def report(self, prediction):
         assert sum(prediction) == 1, print('Probabilities not sum to one!', prediction)
         # Record the contract if multiple traders.
+        self.previous_prediction = self.current_prediction.copy()
         self.current_prediction = prediction.copy()
 
     def log_resolve(self, materialised_index):
-        scores = np.log(self.current_prediction) - np.log(self.init_prediction)
+        scores = np.log(self.current_prediction) - np.log(self.previous_prediction)
         return scores[materialised_index]
 
 
@@ -35,10 +37,7 @@ class Bucket:
         self.pr_red_ball_red_bucket = pr_red_ball_red_bucket
         self.pr_red_ball_blue_bucket = pr_red_ball_blue_bucket
         self.colour = np.random.choice(['red_bucket', 'blue_bucket'], p=(self.prior_red, 1 - self.prior_red))
-        if self.colour == 'red_bucket':
-            self.ball_list = ['red', 'red', 'blue']
-        else:
-            self.ball_list = ['blue', 'blue', 'red']
+
 
     def signal(self):
         if self.colour == 'red_bucket':
@@ -128,7 +127,8 @@ def expected_log_reward_red_ball(actual_pr_ru_rs, estimated_pr_ru_rs, pr_ru):
     :return: float
         expected logarithmic reward given red signal
     """
-    return actual_pr_ru_rs * (np.log(estimated_pr_ru_rs) - np.log(pr_ru)) + (1 - actual_pr_ru_rs) * (np.log(1 - estimated_pr_ru_rs) - np.log(1 - pr_ru))
+    return actual_pr_ru_rs * (np.log(estimated_pr_ru_rs) - np.log(pr_ru)) + (1 - actual_pr_ru_rs) * (
+                np.log(1 - estimated_pr_ru_rs) - np.log(1 - pr_ru))
 
 
 def expected_log_reward_blue_ball(actual_pr_ru_bs, estimated_pr_ru_bs, pr_ru):
@@ -143,8 +143,27 @@ def expected_log_reward_blue_ball(actual_pr_ru_bs, estimated_pr_ru_bs, pr_ru):
     :return: float
         expected logarithmic reward given red signal
     """
-    return actual_pr_ru_bs * (np.log(estimated_pr_ru_bs) - np.log(pr_ru)) + (1 - actual_pr_ru_bs) * (np.log(1 - estimated_pr_ru_bs) - np.log(1 - pr_ru))
+    return actual_pr_ru_bs * (np.log(estimated_pr_ru_bs) - np.log(pr_ru)) + (1 - actual_pr_ru_bs) * (
+                np.log(1 - estimated_pr_ru_bs) - np.log(1 - pr_ru))
 
+
+# TODO: How to compute the regret for second agent?
+# def compute_regret(signal, pi, prior_red, pr_red_ball_red_bucket, pr_red_ball_blue_bucket):
+#     if signal == 'red':
+#         actual_pr_ru_S = analytical_best_report_ru_rs(pr_ru=prior_red, pr_rs_ru=pr_red_ball_red_bucket,
+#                                                       pr_rs_bu=pr_red_ball_blue_bucket)
+#         expected_log_reward = expected_log_reward_red_ball(actual_pr_ru_rs=actual_pr_ru_S, estimated_pr_ru_rs=pi,
+#                                                            pr_ru=prior_red)
+#         max_expected_log_reward = expected_log_reward_red_ball(actual_pr_ru_rs=actual_pr_ru_S,
+#                                                                estimated_pr_ru_rs=actual_pr_ru_S, pr_ru=prior_red)
+#     else:
+#         actual_pr_ru_S = analytical_best_report_ru_bs(pr_ru=prior_red, pr_bs_ru=1 - pr_red_ball_red_bucket,
+#                                                       pr_bs_bu=1 - pr_red_ball_blue_bucket)
+#         expected_log_reward = expected_log_reward_blue_ball(actual_pr_ru_bs=actual_pr_ru_S, estimated_pr_ru_bs=pi,
+#                                                             pr_ru=prior_red)
+#         max_expected_log_reward = expected_log_reward_blue_ball(actual_pr_ru_bs=actual_pr_ru_S,
+#                                                                 estimated_pr_ru_bs=actual_pr_ru_S, pr_ru=prior_red)
+#     return max_expected_log_reward - expected_log_reward
 
 def no_outlier_array(points, thresh=3):
     z = np.abs(stats.zscore(points))
@@ -163,9 +182,16 @@ def one_hot_encode(feature):
         return [0, 1]
 
 
+def one_hot_decode(one_hot_feature):
+    if one_hot_feature == [1, 0]:
+        return 'red'
+    else:
+        return 'blue'
+
+
 def gradients_box_plot(df, bins, col_name, color, ax):
     _df = df.copy()
-    _df['bin']=pd.cut(_df.index.to_series(), bins=bins, include_lowest=True)
+    _df['bin'] = pd.cut(_df.index.to_series(), bins=bins, include_lowest=True)
 
     box_list = []
     for interval in _df['bin'].unique():
@@ -176,8 +202,9 @@ def gradients_box_plot(df, bins, col_name, color, ax):
     for patch in bplot['boxes']:
         patch.set_facecolor(color)
     ax.yaxis.grid(True)
-    ax.set_xticklabels(labels=_df['bin'].unique(),rotation=15)
+    ax.set_xticklabels(labels=_df['bin'].unique(), rotation=15)
     ax.set_title(col_name)
+
 
 def gradients_box_subplot(df, column_list, colour_list, axs):
     for col_name, ax, colour in zip(column_list, axs, colour_list):
