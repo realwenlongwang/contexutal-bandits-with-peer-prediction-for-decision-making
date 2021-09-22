@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 class PredictionMarket:
 
     def __init__(self, prior_red):
-        self.init_prediction = prior_red
+        self.init_prediction = [prior_red, 1 - prior_red]
         self.current_prediction = self.init_prediction.copy()
         self.previous_prediction = self.current_prediction.copy()
 
@@ -24,7 +24,6 @@ class PredictionMarket:
 
 
 class Bucket:
-
     def __init__(self, prior_red=0.5, pr_red_ball_red_bucket=2 / 3, pr_red_ball_blue_bucket=1 / 3):
         assert prior_red >= 0, 'Prior can not be negative!'
         assert prior_red <= 1, 'Prior can not greater than one!'
@@ -37,7 +36,6 @@ class Bucket:
         self.pr_red_ball_red_bucket = pr_red_ball_red_bucket
         self.pr_red_ball_blue_bucket = pr_red_ball_blue_bucket
         self.colour = np.random.choice(['red_bucket', 'blue_bucket'], p=(self.prior_red, 1 - self.prior_red))
-
 
     def signal(self):
         if self.colour == 'red_bucket':
@@ -73,8 +71,7 @@ class Explorer:
             if self.std < self.min_std:
                 self.std = self.min_std
         self.h = np.random.normal(loc=self.mean, scale=self.std)
-        pred = expit(self.h)
-        return [pred, 1 - pred]
+        return self.h
 
     def update(self, reward, x):
         if self.learning:
@@ -128,7 +125,7 @@ def expected_log_reward_red_ball(actual_pr_ru_rs, estimated_pr_ru_rs, pr_ru):
         expected logarithmic reward given red signal
     """
     return actual_pr_ru_rs * (np.log(estimated_pr_ru_rs) - np.log(pr_ru)) + (1 - actual_pr_ru_rs) * (
-                np.log(1 - estimated_pr_ru_rs) - np.log(1 - pr_ru))
+            np.log(1 - estimated_pr_ru_rs) - np.log(1 - pr_ru))
 
 
 def expected_log_reward_blue_ball(actual_pr_ru_bs, estimated_pr_ru_bs, pr_ru):
@@ -144,7 +141,7 @@ def expected_log_reward_blue_ball(actual_pr_ru_bs, estimated_pr_ru_bs, pr_ru):
         expected logarithmic reward given red signal
     """
     return actual_pr_ru_bs * (np.log(estimated_pr_ru_bs) - np.log(pr_ru)) + (1 - actual_pr_ru_bs) * (
-                np.log(1 - estimated_pr_ru_bs) - np.log(1 - pr_ru))
+            np.log(1 - estimated_pr_ru_bs) - np.log(1 - pr_ru))
 
 
 # TODO: How to compute the regret for second agent?
