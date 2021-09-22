@@ -12,7 +12,7 @@ def gaussian(x, mu, sigma):
 
 class Agent:
 
-    def __init__(self, learning_rate_theta):
+    def __init__(self, learning_rate_theta, name):
         self.init_learning_rate_theta = learning_rate_theta
         self.learning_rate_theta = self.init_learning_rate_theta
 
@@ -22,6 +22,7 @@ class Agent:
         self.mean_gradients_history_list = []
         self.mean_weights_history_list = []
         self.reward_history_list = []
+        self.name = name
 
     def learning_rate_decay(self, epoch, decay_rate):
         self.learning_rate_theta = 1 / (1 + decay_rate * epoch) * self.init_learning_rate_theta
@@ -38,7 +39,7 @@ class Agent:
         fig, axs = plt.subplots(3, figsize=(18, 9 * 3))
         gradients_box_subplot(df=grad_mean_history_df.iloc[100:, :], column_list=grad_mean_history_df.columns,
                               colour_list=['red', 'blue', 'green'], axs=axs)
-        fig.suptitle("Mean Gradients History")
+        fig.suptitle(self.name + " Mean Gradients History")
 
     def mean_gradients_successive_dot_product_plot(self, moving_size=1000):
         grad_mean_successive_dot = np.sum(
@@ -49,7 +50,7 @@ class Agent:
         axs[0].set_title('Successive gradients dot product')
         axs[1].plot(uniform_filter1d(grad_mean_successive_dot[100:], size=moving_size), zorder=-100)
         axs[1].hlines(y=0, xmin=0, xmax=len(grad_mean_successive_dot), linestyles='dashdot', color='black', zorder=-99)
-        axs[1].set_title('Successive gradients dot product size %i moving average' % moving_size)
+        axs[1].set_title(self.name + ' Successive gradients dot product size %i moving average' % moving_size)
 
     def mean_weights_history_plot(self):
         mean_weights_history_df = pd.DataFrame(self.mean_weights_history_list,
@@ -70,15 +71,15 @@ class Agent:
                      xytext=(len(mean_weights_history_df) / 2, np.log(1 / 2) / 2), arrowprops=dict(arrowstyle="->"))
         plt.hlines(y=1, xmin=0, xmax=len(mean_weights_history_df), colors='green', linestyles='dashdot')
         plt.legend()
-        plt.title('Mean Weights History')
+        plt.title(self.name + ' Mean Weights History')
 
 
 class StochasticGradientAgent(Agent):
 
     def __init__(self, feature_shape, learning_rate_theta, learning_rate_wv, memory_size=512, batch_size=16,
-                 beta1=0.9, beta2=0.999, epsilon=1e-8, learning_std=True, fixed_std=1.0):
+                 beta1=0.9, beta2=0.999, epsilon=1e-8, learning_std=True, fixed_std=1.0, name='agent'):
         # Actor weights
-        super().__init__(learning_rate_theta)
+        super().__init__(learning_rate_theta, name)
         self.theta_mean = np.zeros(feature_shape)
         self.theta_std = np.zeros(feature_shape)
         self.learning_std = learning_std
@@ -127,6 +128,7 @@ class StochasticGradientAgent(Agent):
 
     def __print_info(self, t, algorithm):
         if t == 0:
+            print(self.name)
             print('learning_rate_theta=', self.learning_rate_theta, ' learning_rate_wv=', self.learning_rate_wv)
             if self.learning_std:
                 std_string = 'learnable'
@@ -251,7 +253,7 @@ class StochasticGradientAgent(Agent):
         axs[1].plot(reward_history_df['estimated_average_reward'], label='Estimated average reward ')
         axs[1].plot(reward_history_df['actual_reward'].expanding().mean(), zorder=-99, label='Average reward ')
         fig.legend(loc='upper right')
-        fig.suptitle('Reward Histroy')
+        fig.suptitle(self.name + ' Reward Histroy')
 
     def report_history_plot(self):
         report_history_df = pd.DataFrame(self.report_history_list, columns=['report', 'mean', 'std', 'signal'])
@@ -259,7 +261,7 @@ class StochasticGradientAgent(Agent):
         for signal, df in report_history_df.reset_index().groupby('signal'):
             ax.scatter(x=df['index'], y=df['report'], label=signal, marker='.', c=signal, s=3, zorder=-99)
         ax.legend(loc='lower left')
-        plt.title('Report History')
+        plt.title(self.name + ' Report History')
 
 
     def mean_history_plot(self):
@@ -270,16 +272,16 @@ class StochasticGradientAgent(Agent):
         red_line = mlines.Line2D([], [], color='red', label='red signal')
         blue_line = mlines.Line2D([], [], color='blue', label='blue signal')
         ax.legend(handles=[red_line, blue_line], loc='lower left')
-        plt.title('Mean History')
+        plt.title(self.name + ' Mean History')
 
 
 class DeterministicGradientAgent(Agent):
 
     def __init__(self, feature_shape, learning_rate_theta, learning_rate_wv, learning_rate_wq, memory_size=512,
                  batch_size=16,
-                 beta1=0.9, beta2=0.999, epsilon=1e-8):
+                 beta1=0.9, beta2=0.999, epsilon=1e-8, name='agent'):
         # Actor weights
-        super().__init__(learning_rate_theta)
+        super().__init__(learning_rate_theta, name)
         self.theta_mean = np.zeros(feature_shape)
 
         # Critic weights
@@ -319,7 +321,9 @@ class DeterministicGradientAgent(Agent):
 
     def __print_info(self, t, algorithm):
         if t == 0:
-            print('learning_rate_theta=', self.learning_rate_theta, ' learning_rate_wq=', self.learning_rate_wq)
+            print(self.name)
+            print('learning_rate_theta=', self.learning_rate_theta)
+            print('learning_rate_wv=', self.learning_rate_wv,' learning_rate_wq=', self.learning_rate_wq)
             print('memory_size=', self.memory_size)
             print('Updating weights with ' + algorithm + ' algorithm.')
 
@@ -433,7 +437,7 @@ class DeterministicGradientAgent(Agent):
         axs[0].hlines(y=0.0, xmin=0, xmax=reward_history_df.shape[0], colors='black', linestyles='dashdot')
         axs[1].hlines(y=0.0, xmin=0, xmax=reward_history_df.shape[0], colors='black', linestyles='dashdot')
         fig.legend(loc='upper right')
-        fig.suptitle('Reward Histroy')
+        fig.suptitle(self.name +' Reward Histroy')
 
     def mean_history_plot(self):
         report_history_df = pd.DataFrame(self.report_history_list, columns=['mean', 'signal'])
@@ -443,4 +447,4 @@ class DeterministicGradientAgent(Agent):
         red_line = mlines.Line2D([], [], color='red', label='red signal')
         blue_line = mlines.Line2D([], [], color='blue', label='blue signal')
         ax.legend(handles=[red_line, blue_line], loc='lower left')
-        plt.title('Mean History')
+        plt.title(self.name+' Mean History')
