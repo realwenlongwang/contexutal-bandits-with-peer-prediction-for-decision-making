@@ -3,7 +3,15 @@ from scipy.special import expit
 from scipy import stats
 import pandas as pd
 import matplotlib.pyplot as plt
+from enum import Enum
 
+class Ball(Enum):
+    RED = [1, 0]
+    BLUE = [0, 1]
+
+class BucketColour(Enum):
+    RED = 0
+    BLUE = 1
 
 class PredictionMarket:
 
@@ -23,6 +31,19 @@ class PredictionMarket:
         return scores[materialised_index]
 
 
+class DecisionMarket:
+
+    def __init__(self, prior_red_list):
+        self.conditional_market_num = len(prior_red_list)
+        self.conditional_market_list = list(PredictionMarket(prior_red=prior_red) for prior_red in prior_red_list)
+
+    def report(self, prediction, conditional_market_no):
+        self.conditional_market_list[conditional_market_no].report(prediction)
+
+    def log_resolve(self, conditional_market_no, materialised_index):
+        return self.conditional_market_list[conditional_market_no].log_resolve(materialised_index)
+
+
 class Bucket:
     def __init__(self, prior_red=0.5, pr_red_ball_red_bucket=2 / 3, pr_red_ball_blue_bucket=1 / 3):
         assert prior_red >= 0, 'Prior can not be negative!'
@@ -35,14 +56,16 @@ class Bucket:
         self.prior_red = prior_red
         self.pr_red_ball_red_bucket = pr_red_ball_red_bucket
         self.pr_red_ball_blue_bucket = pr_red_ball_blue_bucket
-        self.colour = np.random.choice(['red_bucket', 'blue_bucket'], p=(self.prior_red, 1 - self.prior_red))
+        self.colour = np.random.choice([BucketColour.RED, BucketColour.BLUE], p=(self.prior_red, 1 - self.prior_red))
 
     def signal(self):
-        if self.colour == 'red_bucket':
+        if self.colour == BucketColour.RED:
             ball_distribution = (self.pr_red_ball_red_bucket, 1 - self.pr_red_ball_red_bucket)
-        else:
+        elif self.colour == BucketColour.BLUE:
             ball_distribution = (self.pr_red_ball_blue_bucket, 1 - self.pr_red_ball_blue_bucket)
-        return np.random.choice(['red', 'blue'], p=ball_distribution)
+        else:
+            raise ValueError('Bucket colour incorrect, colour is ' + str(self.colour.name))
+        return np.random.choice([Ball.RED, Ball.BLUE], p=ball_distribution)
 
 
 class Explorer:

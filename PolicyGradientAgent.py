@@ -12,7 +12,7 @@ def gaussian(x, mu, sigma):
 
 class Agent:
 
-    def __init__(self, learning_rate_theta, name):
+    def __init__(self, learning_rate_theta, name, algorithm='regular'):
         self.init_learning_rate_theta = learning_rate_theta
         self.learning_rate_theta = self.init_learning_rate_theta
 
@@ -22,6 +22,7 @@ class Agent:
         self.mean_gradients_history_list = []
         self.mean_weights_history_list = []
         self.reward_history_list = []
+        self.algorithm = algorithm
         self.name = name
 
     def learning_rate_decay(self, epoch, decay_rate):
@@ -76,10 +77,12 @@ class Agent:
 
 class StochasticGradientAgent(Agent):
 
-    def __init__(self, feature_shape, learning_rate_theta, learning_rate_wv, memory_size=512, batch_size=16,
-                 beta1=0.9, beta2=0.999, epsilon=1e-8, learning_std=True, fixed_std=1.0, name='agent'):
+    def __init__(self, feature_shape, learning_rate_theta, learning_rate_wv,
+                 memory_size=512, batch_size=16, beta1=0.9, beta2=0.999,
+                 epsilon=1e-8, learning_std=True, fixed_std=1.0, name='agent',
+                 algorithm='regular'):
         # Actor weights
-        super().__init__(learning_rate_theta, name)
+        super().__init__(learning_rate_theta, name, algorithm)
         self.theta_mean = np.zeros(feature_shape)
         self.theta_std = np.zeros(feature_shape)
         self.learning_std = learning_std
@@ -126,7 +129,7 @@ class StochasticGradientAgent(Agent):
 
         return h, mean, std
 
-    def __print_info(self, t, algorithm):
+    def __print_info(self, t):
         if t == 0:
             print(self.name)
             print('learning_rate_theta=', self.learning_rate_theta, ' learning_rate_wv=', self.learning_rate_wv)
@@ -135,7 +138,7 @@ class StochasticGradientAgent(Agent):
             else:
                 std_string = str(self.fixed_std)
             print('memory_size=', self.memory_size, ' standard deviation=', std_string)
-            print('Updating weights with ' + algorithm + ' algorithm.')
+            print('Updating weights with ' + self.algorithm + ' algorithm.')
 
     def store_experience(self, features, h, mean, std, reward, t):
 
@@ -174,7 +177,7 @@ class StochasticGradientAgent(Agent):
             # idx = np.random.randint(self.memory_size, size=self.batch_size) # with replacement but faster
             return self.memory[idx, :]
 
-    def batch_update(self, t, algorithm='regular'):
+    def batch_update(self, t):
 
         experience_batch = self.__sample_experience(t)
 
@@ -196,33 +199,33 @@ class StochasticGradientAgent(Agent):
         gradient_v = np.mean(batch_gradient_v, axis=0, keepdims=True)
 
         # momentum update
-        if algorithm == 'momentum' or algorithm == 'adam':
+        if self.algorithm == 'momentum' or self.algorithm == 'adam':
             self.v_dw_mean = self.beta1 * self.v_dw_mean + (1 - self.beta1) * gradient_mean
             if self.learning_std:
                 self.v_dw_std = self.beta1 * self.v_dw_std + (1 - self.beta1) * gradient_std
 
         # RMSprop update
-        if algorithm == 'adam':
+        if self.algorithm == 'adam':
             self.s_dw_mean = self.beta2 * self.s_dw_mean + (1 - self.beta2) * (np.power(gradient_mean, 2))
             if self.learning_std:
                 self.s_dw_std = self.beta2 * self.s_dw_std + (1 - self.beta2) * (np.power(gradient_std, 2))
 
         # bias correction
-        if algorithm == 'momentum' or algorithm == 'adam':
+        if self.algorithm == 'momentum' or self.algorithm == 'adam':
             v_dw_mean_corrected = self.v_dw_mean / (1 - np.power(self.beta1, t + 1))
             if self.learning_std:
                 v_dw_std_corrected = self.v_dw_std / (1 - np.power(self.beta1, t + 1))
-            if algorithm == 'adam':
+            if self.algorithm == 'adam':
                 s_dw_mean_corrected = self.s_dw_mean / (1 - np.power(self.beta2, t + 1))
                 if self.learning_std:
                     s_dw_std_corrected = self.s_dw_std / (1 - np.power(self.beta2, t + 1))
 
-        if algorithm == 'momentum':
+        if self.algorithm == 'momentum':
             gradient_mean = v_dw_mean_corrected
             if self.learning_std:
                 gradient_std = v_dw_std_corrected
         # Adam term
-        elif algorithm == 'adam':
+        elif self.algorithm == 'adam':
             gradient_mean = (v_dw_mean_corrected / (np.sqrt(s_dw_mean_corrected) + self.epsilon))
             if self.learning_std:
                 gradient_std = (v_dw_std_corrected / (np.sqrt(s_dw_std_corrected) + self.epsilon))
@@ -232,7 +235,7 @@ class StochasticGradientAgent(Agent):
         self.theta_mean += self.learning_rate_theta * gradient_mean
         if self.learning_std:
             self.theta_std += self.learning_rate_theta * gradient_std
-        self.__print_info(t, algorithm)
+        self.__print_info(t)
 
         self.w_v += self.learning_rate_wv * gradient_v
 
@@ -263,7 +266,6 @@ class StochasticGradientAgent(Agent):
         ax.legend(loc='lower left')
         plt.title(self.name + ' Report History')
 
-
     def mean_history_plot(self):
         report_history_df = pd.DataFrame(self.report_history_list, columns=['report', 'mean', 'std', 'signal'])
         fig, ax = plt.subplots(figsize=(15, 4))
@@ -277,11 +279,11 @@ class StochasticGradientAgent(Agent):
 
 class DeterministicGradientAgent(Agent):
 
-    def __init__(self, feature_shape, learning_rate_theta, learning_rate_wv, learning_rate_wq, memory_size=512,
-                 batch_size=16,
-                 beta1=0.9, beta2=0.999, epsilon=1e-8, name='agent'):
+    def __init__(self, feature_shape, learning_rate_theta, learning_rate_wv,
+                 learning_rate_wq, memory_size=512, batch_size=16, beta1=0.9,
+                 beta2=0.999, epsilon=1e-8, name='agent', algorithm='regular'):
         # Actor weights
-        super().__init__(learning_rate_theta, name)
+        super().__init__(learning_rate_theta, name, algorithm)
         self.theta_mean = np.zeros(feature_shape)
 
         # Critic weights
@@ -319,13 +321,13 @@ class DeterministicGradientAgent(Agent):
             self.reward_history_list.append([one_hot_decode(features_list[:2]), features_list[2]])
         return mean
 
-    def __print_info(self, t, algorithm):
+    def __print_info(self, t):
         if t == 0:
             print(self.name)
             print('learning_rate_theta=', self.learning_rate_theta)
-            print('learning_rate_wv=', self.learning_rate_wv,' learning_rate_wq=', self.learning_rate_wq)
+            print('learning_rate_wv=', self.learning_rate_wv, ' learning_rate_wq=', self.learning_rate_wq)
             print('memory_size=', self.memory_size)
-            print('Updating weights with ' + algorithm + ' algorithm.')
+            print('Updating weights with ' + self.algorithm + ' algorithm.')
 
     def store_experience(self, features, action, reward, t):
         idx = t % self.memory_size
@@ -371,7 +373,7 @@ class DeterministicGradientAgent(Agent):
             # idx = np.random.randint(self.memory_size, size=self.batch_size)
             return self.memory[idx, :]
 
-    def batch_update(self, t, algorithm='adam'):
+    def batch_update(self, t):
 
         experience_batch = self.__sample_experience(t)
 
@@ -392,36 +394,34 @@ class DeterministicGradientAgent(Agent):
         gradient_v = np.mean(batch_gradient_v, axis=0, keepdims=True)
 
         # momentum update
-        if algorithm == 'momentum' or algorithm == 'adam':
+        if self.algorithm == 'momentum' or self.algorithm == 'adam':
             self.v_dw_mean = self.beta1 * self.v_dw_mean + (1 - self.beta1) * gradient_mean
 
         # RMSprop update
-        if algorithm == 'adam':
+        if self.algorithm == 'adam':
             self.s_dw_mean = self.beta2 * self.s_dw_mean + (1 - self.beta2) * (np.power(gradient_mean, 2))
 
         # bias correction
-        if algorithm == 'momentum' or algorithm == 'adam':
+        if self.algorithm == 'momentum' or self.algorithm == 'adam':
             v_dw_mean_corrected = self.v_dw_mean / (1 - np.power(self.beta1, t + 1))
-            if algorithm == 'adam':
+            if self.algorithm == 'adam':
                 s_dw_mean_corrected = self.s_dw_mean / (1 - np.power(self.beta2, t + 1))
 
-
-        if algorithm == 'momentum':
+        if self.algorithm == 'momentum':
             gradient_mean = v_dw_mean_corrected
         # Adam term
-        elif algorithm == 'adam':
+        elif self.algorithm == 'adam':
             gradient_mean = (v_dw_mean_corrected / (np.sqrt(s_dw_mean_corrected) + self.epsilon))
 
         # update weights
         self.theta_mean += self.learning_rate_theta * gradient_mean
 
-        self.__print_info(t, algorithm)
+        self.__print_info(t)
         self.w_q += self.learning_rate_wq * gradient_q
         self.w_v += self.learning_rate_wv * gradient_v
 
         if self.evaluating:
             self.mean_gradients_history_list.append(gradient_mean[0, :])
-
 
     def reward_history_plot(self):
         reward_history_df = pd.DataFrame(self.reward_history_list,
@@ -437,7 +437,7 @@ class DeterministicGradientAgent(Agent):
         axs[0].hlines(y=0.0, xmin=0, xmax=reward_history_df.shape[0], colors='black', linestyles='dashdot')
         axs[1].hlines(y=0.0, xmin=0, xmax=reward_history_df.shape[0], colors='black', linestyles='dashdot')
         fig.legend(loc='upper right')
-        fig.suptitle(self.name +' Reward Histroy')
+        fig.suptitle(self.name + ' Reward Histroy')
 
     def mean_history_plot(self):
         report_history_df = pd.DataFrame(self.report_history_list, columns=['mean', 'signal'])
@@ -447,4 +447,6 @@ class DeterministicGradientAgent(Agent):
         red_line = mlines.Line2D([], [], color='red', label='red signal')
         blue_line = mlines.Line2D([], [], color='blue', label='blue signal')
         ax.legend(handles=[red_line, blue_line], loc='lower left')
-        plt.title(self.name+' Mean History')
+        plt.title(self.name + ' Mean History')
+
+
