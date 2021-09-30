@@ -6,16 +6,26 @@ import matplotlib.pyplot as plt
 from enum import Enum
 
 class Ball(Enum):
-    RED = [1, 0]
-    BLUE = [0, 1]
+    RED = 0
+    BLUE = 1
 
 class BucketColour(Enum):
     RED = 0
     BLUE = 1
 
+class Algorithm(Enum):
+    REGULAR = 0
+    MOMENTUM = 1
+    ADAM = 2
+
+class ScoreFunction(Enum):
+    LOG = 0
+    QUADRATIC = 1
+
 class PredictionMarket:
 
-    def __init__(self, prior_red):
+    def __init__(self, no, prior_red):
+        self.no = no
         self.init_prediction = [prior_red, 1 - prior_red]
         self.current_prediction = self.init_prediction.copy()
         self.previous_prediction = self.current_prediction.copy()
@@ -30,22 +40,42 @@ class PredictionMarket:
         scores = np.log(self.current_prediction) - np.log(self.previous_prediction)
         return scores[materialised_index]
 
+    def brier_resolve(self, materialised_index):
+        current_scores = self.current_prediction[materialised_index] - np.sum(np.square(self.current_prediction))/2
+        previous_scores = self.previous_prediction[materialised_index] - np.sum(np.square(self.previous_prediction))/2
+        return current_scores - previous_scores
+
+    def resolve(self, score_func, materialised_index):
+        if score_func == ScoreFunction.LOG:
+            return self.log_resolve(materialised_index)
+        elif score_func == ScoreFunction.QUADRATIC:
+            return self.brier_resolve(materialised_index)
+        else:
+            raise ValueError('The score function does not exist.')
+
+
+
 
 class DecisionMarket:
 
-    def __init__(self, prior_red_list):
-        self.conditional_market_num = len(prior_red_list)
-        self.conditional_market_list = list(PredictionMarket(prior_red=prior_red) for prior_red in prior_red_list)
+    def __init__(self, action_num, prior_red):
+        self.conditional_market_num = action_num
+        self.conditional_market_list = list(PredictionMarket(no, prior_red) for no in range(self.conditional_market_num))
 
     def report(self, prediction, conditional_market_no):
         self.conditional_market_list[conditional_market_no].report(prediction)
 
+
+
     def log_resolve(self, conditional_market_no, materialised_index):
         return self.conditional_market_list[conditional_market_no].log_resolve(materialised_index)
 
+    def read_current_pred(self):
+        current_price_list = list(pm.current_prediction[0] for pm in self.conditional_market_list)
+
 
 class Bucket:
-    def __init__(self, prior_red=0.5, pr_red_ball_red_bucket=2 / 3, pr_red_ball_blue_bucket=1 / 3):
+    def __init__(self, no, prior_red, pr_red_ball_red_bucket, pr_red_ball_blue_bucket):
         assert prior_red >= 0, 'Prior can not be negative!'
         assert prior_red <= 1, 'Prior can not greater than one!'
         assert pr_red_ball_red_bucket >= 0, 'Prior can not be negative!'
@@ -53,6 +83,7 @@ class Bucket:
         assert pr_red_ball_blue_bucket >= 0, 'Prior can not be negative!'
         assert pr_red_ball_blue_bucket <= 1, 'Prior can not greater than one!'
 
+        self.no = no
         self.prior_red = prior_red
         self.pr_red_ball_red_bucket = pr_red_ball_red_bucket
         self.pr_red_ball_blue_bucket = pr_red_ball_blue_bucket
@@ -67,6 +98,19 @@ class Bucket:
             raise ValueError('Bucket colour incorrect, colour is ' + str(self.colour.name))
         return np.random.choice([Ball.RED, Ball.BLUE], p=ball_distribution)
 
+class MultiBuckets:
+    def __init__(self, bucket_num, prior_red, pr_red_ball_red_bucket, pr_red_ball_blue_bucket):
+        self.prior_red = prior_red
+        self.pr_red_ball_red_bucket = pr_red_ball_red_bucket
+        self.pr_red_ball_blue_bucket = pr_red_ball_blue_bucket
+        self.bucket_list = []
+        for no in range(bucket_num):
+            self.bucket_list.append(Bucket(no, prior_red, pr_red_ball_red_bucket, pr_red_ball_blue_bucket))
+
+    def signal(self):
+        # Randomly select a bucket
+        bucket = np.random.choice(self.bucket_list)
+        return bucket.no, bucket.signal()
 
 class Explorer:
     def __init__(self, feature_shape, learning=True, init_learning_rate=0.001, min_std=0.3):
@@ -136,6 +180,21 @@ def analytical_best_report_ru_bs(pr_ru, pr_bs_ru, pr_bs_bu):
 
 
 def expected_log_reward_red_ball(actual_pr_ru_rs, estimated_pr_ru_rs, pr_ru):
+    """
+    This function compute the expected logarithmic reward given a red ball signal
+    :param actual_pr_ru_rs: float
+        Ground truth probability of conditional probability of red urn given a red ball signal
+    :param estimated_pr_ru_rs: float
+        Estimated probability of conditional probability of red urn given a red ball signal
+    :param pr_ru: float
+        Prior probability of a red urn
+    :return: float
+        expected logarithmic reward given red signal
+    """
+    return actual_pr_ru_rs * (np.log(estimated_pr_ru_rs) - np.log(pr_ru)) + (1 - actual_pr_ru_rs) * (
+            np.log(1 - estimated_pr_ru_rs) - np.log(1 - pr_ru))
+
+def expected_quodratic_reward_red_ball(actual_pr_ru_rs, estimated_pr_ru_rs, pr_ru):
     """
     This function compute the expected logarithmic reward given a red ball signal
     :param actual_pr_ru_rs: float

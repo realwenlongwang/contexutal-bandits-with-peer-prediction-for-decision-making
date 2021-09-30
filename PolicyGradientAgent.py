@@ -107,11 +107,10 @@ class StochasticGradientAgent(Agent):
         self.batch_size = batch_size
         self.memory_size = memory_size
 
-    def report(self, features_list):
-        features = np.array(features_list)
-        [mean] = np.dot(self.theta_mean, features.T)
+    def report(self, signal):
+        [mean] = np.dot(self.theta_mean, signal)
         if self.learning_std:
-            [std] = np.exp(np.dot(self.theta_std, features.T))
+            [std] = np.exp(np.dot(self.theta_std, signal))
         else:
             std = self.fixed_std
 
@@ -124,8 +123,8 @@ class StochasticGradientAgent(Agent):
             raise AssertionError('Warning: report is None !!!')
 
         if self.evaluating:
-            self.report_history_list.append([expit(h), mean, std, one_hot_decode(features_list[:2])])
-            self.reward_history_list.append([one_hot_decode(features_list[:2]), features_list[2]])
+            self.report_history_list.append([expit(h), mean, std, one_hot_decode(signal[:2])])
+            self.reward_history_list.append([one_hot_decode(signal[:2]), signal[2]])
 
         return h, mean, std
 
@@ -140,13 +139,13 @@ class StochasticGradientAgent(Agent):
             print('memory_size=', self.memory_size, ' standard deviation=', std_string)
             print('Updating weights with ' + self.algorithm + ' algorithm.')
 
-    def store_experience(self, features, h, mean, std, reward, t):
+    def store_experience(self, signal, h, mean, std, reward, t):
 
-        [v] = np.dot(self.w_v, features)
+        [v] = np.dot(self.w_v, signal)
         delta = reward - v
 
         idx = t % self.memory_size
-        self.memory[idx, :3] = features
+        self.memory[idx, :3] = signal
         self.memory[idx, 3] = h
         self.memory[idx, 4] = mean
         self.memory[idx, 5] = std
@@ -157,9 +156,9 @@ class StochasticGradientAgent(Agent):
             self.reward_history_list[-1].append(reward)
             self.reward_history_list[-1].append(v)
             # self.reward_history_list[-1].append(compute_regret(
-            #     signal=one_hot_decode(features[:2]),
+            #     signal=one_hot_decode(signal[:2]),
             #     pi=expit(h),
-            #     prior_red=features[2],
+            #     prior_red=signal[2],
             #     pr_red_ball_red_bucket=self.pr_red_ball_red_bucket,
             #     pr_red_ball_blue_bucket=self.pr_red_ball_blue_bucket))
             self.mean_weights_history_list.append(self.theta_mean[0].tolist())
@@ -302,23 +301,21 @@ class DeterministicGradientAgent(Agent):
         self.s_dw_mean = np.zeros(feature_shape)
 
         # Experience replay
-        self.memory = np.zeros((memory_size, 14))  # features, action
+        self.memory = np.zeros((memory_size, 14))  # signal, action
         self.batch_size = batch_size
         self.memory_size = memory_size
 
-    def report(self, features_list):
+    def report(self, signal):
 
-        features = np.array(features_list)
-
-        [mean] = np.dot(self.theta_mean, features)
+        [mean] = np.dot(self.theta_mean, signal)
 
         if np.isnan(mean):
             print('mean:', mean)
             raise AssertionError('Warning: report is None !!!')
 
         if self.evaluating:
-            self.report_history_list.append([mean, one_hot_decode(features_list[:2])])
-            self.reward_history_list.append([one_hot_decode(features_list[:2]), features_list[2]])
+            self.report_history_list.append([mean, one_hot_decode(signal[:2])])
+            self.reward_history_list.append([one_hot_decode(signal[:2]), signal[2]])
         return mean
 
     def __print_info(self, t):
@@ -329,16 +326,15 @@ class DeterministicGradientAgent(Agent):
             print('memory_size=', self.memory_size)
             print('Updating weights with ' + self.algorithm + ' algorithm.')
 
-    def store_experience(self, features, action, reward, t):
+    def store_experience(self, signal, action, mean, reward, t):
         idx = t % self.memory_size
 
-        theta = np.dot(features, self.theta_mean.T)
-        phis = (action - theta) * features
+        phis = np.multiply((action - mean), signal)
 
-        v = np.dot(features, self.w_v.T)
-        q = np.dot(phis, self.w_q.T) + v
+        [v] = np.dot(self.w_v, signal)
+        [q] = np.dot(self.w_q, phis) + v
 
-        self.memory[idx, :3] = features
+        self.memory[idx, :3] = signal
         self.memory[idx, 3:6] = phis
         self.memory[idx, 6] = reward - q
         self.memory[idx, 7:10] = self.w_q
@@ -350,14 +346,12 @@ class DeterministicGradientAgent(Agent):
             self.reward_history_list[-1].append(v)
             self.reward_history_list[-1].append(q)
             # self.reward_history_list[-1].append(compute_regret(
-            #     signal=one_hot_decode(features[:2]),
+            #     signal=one_hot_decode(signal[:2]),
             #     pi=expit(h),
-            #     prior_red=features[2],
+            #     prior_red=signal[2],
             #     pr_red_ball_red_bucket=self.pr_red_ball_red_bucket,
             #     pr_red_ball_blue_bucket=self.pr_red_ball_blue_bucket))
             self.mean_weights_history_list.append(self.theta_mean[0].tolist())
-
-        return [v, q]
 
     def __sample_experience(self, t):
 
