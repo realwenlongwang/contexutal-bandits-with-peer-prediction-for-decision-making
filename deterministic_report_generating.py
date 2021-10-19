@@ -18,9 +18,9 @@ def rewards_fig(reward_history_df, file_name):
     fig, axs = plt.subplots(3, figsize=(16, 4*3))
     axs[0].scatter(x=reward_history_df.index, y=reward_history_df['explorer_reward'], label='Explorer log rewards',
                    marker='.', s=3, zorder=-100)
-    # axs[0].scatter(x=reward_history_df.index, y=reward_history_df['actual_reward'],label = 'Actor log rewards', marker='.', s=3, zorder=-99)
+    # axs[0].scatter(signal_array=reward_history_df.index, y=reward_history_df['actual_reward'],label = 'Actor log rewards', marker='.', s=3, zorder=-99)
     for prior, df in reward_history_df.reset_index().groupby('prior_red'):
-        axs[1].plot(df['explorer_reward'].expanding().mean(), zorder=-97, label='Average reward ' + str(prior))
+        axs[1].plot(df['explorer_reward'].expanding().mean_array(), zorder=-97, label='Average reward_array ' + str(prior))
         axs[1].plot(df.loc[:, 'v'], zorder=-98, label='V_approx ' + str(prior))
         axs[1].scatter(x=df['index'], y=df.loc[:, 'q'], zorder=-99, label='Q_approx ' + str(prior), marker='.', s=3,
                        alpha=0.6)
@@ -51,8 +51,8 @@ def grad_q_fig(grad_q_history_df, file_name):
 
 def mean_fig(mean_history_df, file_name):
     fig, ax = plt.subplots(figsize=(16, 4))
-    for signal, df in mean_history_df.reset_index().groupby('signal'):
-        ax.scatter(x=df['index'], y=expit(df['mean']), label=signal, marker='.', c=signal, alpha=0.6, s=0.1)
+    for signal, df in mean_history_df.reset_index().groupby('signal_array'):
+        ax.scatter(x=df['index'], y=expit(df['mean_array']), label=signal, marker='.', c=signal, alpha=0.6, s=0.1)
     for prior_red in prior_red_list:
         plt.hlines(
             y=analytical_best_report_ru_rs(
@@ -67,8 +67,8 @@ def mean_fig(mean_history_df, file_name):
                 pr_bs_ru=1 - pr_red_ball_red_bucket,
                 pr_bs_bu=1 - pr_red_ball_blue_bucket
             ), xmin=0, xmax=len(mean_history_df), colors='blue', linestyles='dashdot')
-    red_line = mlines.Line2D([], [], color='red', label='red signal')
-    blue_line = mlines.Line2D([], [], color='blue', label='blue signal')
+    red_line = mlines.Line2D([], [], color='red', label='red signal_array')
+    blue_line = mlines.Line2D([], [], color='blue', label='blue signal_array')
     # for coord in phase_change_coordinates(mark_index, mean_history_df):
     #     plt.annotate('change', xy=coord, xytext=(coord[0], 0.1), arrowprops=dict(arrowstyle="->"))
     ax.legend(handles=[red_line, blue_line], loc='lower left')
@@ -239,7 +239,7 @@ def main_loop(learning_rate_theta, learning_rate_wv, learning_rate_wq ,memory_si
         #     _pi = np.random.uniform() # uniform doesn't work, reason unknown.
         #     explorer_report = [_pi, 1-_pi]
 
-        explorer_std_list.append(explorer.std)
+        explorer_std_list.append(explorer.std_array)
 
         pm.report(explorer_report)
         R = pm.log_resolve(bucket_colour_to_num[bucket.colour])
@@ -376,7 +376,7 @@ def generating_report(document, learning_rate_space, learning_rate_wv_space, lea
                                         'regret',
                                         'v',
                                         'q',
-                                        'signal',
+                                        'signal_array',
                                         'prior_red'
                                     ]
                                 )
@@ -386,7 +386,7 @@ def generating_report(document, learning_rate_space, learning_rate_wv_space, lea
                                                                  columns=['red_v', 'blue_v', 'prior_v'])
                                 grad_q_history_df = pd.DataFrame(grad_q_history_list,
                                                                  columns=['red_q', 'blue_q', 'prior_q'])
-                                mean_history_df = pd.DataFrame(mean_history_list, columns=['mean', 'signal'])
+                                mean_history_df = pd.DataFrame(mean_history_list, columns=['mean_array', 'signal_array'])
 
                                 reward_img_dir = rewards_fig(reward_history_df=reward_history_df, file_name=filename)
                                 weights_img_dir = weights_for_mean_fig(mean_weights_history_df=mean_weights_history_df, file_name=filename, pr_red_ball_red_bucket=pr_red_ball_red_bucket, pr_red_ball_blue_bucket=pr_red_ball_blue_bucket)
@@ -434,11 +434,11 @@ if __name__ == '__main__':
     # baseline comparison, training iteration dependent on learning rate.
     document = Document()
     document.add_heading('Deterministic Policy Gradient Hyper-parameter Report', 0)
-    # document.add_heading('Expected reward', level=1)
+    # document.add_heading('Expected reward_array', level=1)
     # document = generating_report(document=document, file_prefix='er', learning_rate_space=learning_rate_space, memory_size_space=memory_size_space)
 
 
-    document.add_heading('Actual reward', level=1)
+    document.add_heading('Actual reward_array', level=1)
     document = generating_report(
         document=document, learning_rate_space=learning_rate_space,
         learning_rate_wv_space=learning_rate_wv_space,

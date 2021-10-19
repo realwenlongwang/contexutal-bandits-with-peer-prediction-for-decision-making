@@ -17,12 +17,12 @@ def rewards_fig(reward_history_df, file_name):
     fig, axs = plt.subplots(3, figsize=(15, 8))
     axs[0].scatter(x=reward_history_df.index, y=reward_history_df['actual_reward'], label='Actual log rewards',
                    marker='.', s=3)
-    axs[1].plot(no_outlier_array(reward_history_df.iloc[:, 1]), 'y', zorder=-99, label='Average reward')
+    axs[1].plot(no_outlier_array(reward_history_df.iloc[:, 1]), 'y', zorder=-99, label='Average reward_array')
     axs[2].plot(reward_history_df['max_expected_reward'] - reward_history_df['expected_reward'], 'g.', label='Regret')
     axs[0].hlines(y=0.0, xmin=0, xmax=reward_history_df.shape[0], colors='black', linestyles='dashdot')
     axs[1].hlines(y=0.0, xmin=0, xmax=reward_history_df.shape[0], colors='black', linestyles='dashdot')
     for signal, df in reward_history_df.reset_index().groupby('prior_red'):
-        axs[1].scatter(x=df['index'], y=df['estimated_reward'], label='Estimated reward ' + str(signal), marker='.',
+        axs[1].scatter(x=df['index'], y=df['estimated_reward'], label='Estimated reward_array ' + str(signal), marker='.',
                        s=3)
     fig.legend()
     fig.suptitle('Actual Rewards and Average')
@@ -32,7 +32,7 @@ def rewards_fig(reward_history_df, file_name):
 
 def report_fig(report_history_df, prior_red_list, pr_red_ball_red_bucket, pr_red_ball_blue_bucket,file_name):
     fig, ax = plt.subplots(figsize=(15, 4))
-    for signal, df in report_history_df.reset_index().groupby('signal'):
+    for signal, df in report_history_df.reset_index().groupby('signal_array'):
         ax.scatter(x=df['index'], y=df['report'], label=signal, marker='.', c=signal, s=3, zorder=-99)
     for prior_red in prior_red_list:
         plt.hlines(
@@ -162,11 +162,9 @@ def main_loop(learning_rate_theta, learning_rate_wv, memory_size, training_episo
     pr_red_ball_red_bucket = 2/3
     pr_red_ball_blue_bucket = 1/3
 
-    agent = StochasticGradientAgent(feature_shape=[1, 3], learning_rate_theta=learning_rate_theta,
-                                    learning_rate_wv=learning_rate_wv,
-                                    memory_size=memory_size, batch_size=batch_size,
-                                    beta1=beta1, beta2=beta2,
-                                    learning_std=learning_std, fixed_std=fixed_std)
+    agent = StochasticGradientAgent(feature_num=[1, 3], action_num=1, learning_rate_theta=learning_rate_theta,
+                                    learning_rate_wv=learning_rate_wv, memory_size=memory_size, batch_size=batch_size,
+                                    beta1=beta1, beta2=beta2, learning_std=learning_std, fixed_std=fixed_std)
 
     reward_history_list = []
     average_reward = 0
@@ -341,10 +339,10 @@ def generating_report(document, learning_rate_space, learning_rate_wv_space ,mem
                             exit(1)
 
                         if std == 0:
-                            std_p.add_run(' final std: ' + str(final_std))
+                            std_p.add_run(' final std_array: ' + str(final_std))
 
-                        reward_history_df = pd.DataFrame(reward_history_list, columns=['actual_reward', 'average_reward', 'estimated_reward', 'expected_reward', 'max_expected_reward','signal', 'prior_red'])
-                        report_history_df = pd.DataFrame(report_history_list, columns=['report', 'signal'])
+                        reward_history_df = pd.DataFrame(reward_history_list, columns=['actual_reward', 'average_reward', 'estimated_reward', 'expected_reward', 'max_expected_reward','signal_array', 'prior_red'])
+                        report_history_df = pd.DataFrame(report_history_list, columns=['report', 'signal_array'])
                         grad_mean_history_df = pd.DataFrame(grad_mean_history_list, columns=['red_ball', 'blue_ball', 'prior'])
                         mean_weights_history_df = pd.DataFrame(mean_weights_history_list, columns=['red_weight', 'blue_weight', 'prior_weight'])
 
@@ -398,11 +396,11 @@ if __name__ == '__main__':
 
 
     document.add_heading('Stochastic Policy Gradient Hyper-parameter Report', 0)
-    # document.add_heading('Expected reward', level=1)
+    # document.add_heading('Expected reward_array', level=1)
     # document = generating_report(document=document, file_prefix='er', learning_rate_space=learning_rate_space, memory_size_space=memory_size_space)
 
 
-    document.add_heading('Actual reward', level=1)
+    document.add_heading('Actual reward_array', level=1)
     document = generating_report(document=document, learning_rate_space=learning_rate_space,
                                  learning_rate_wv_space=learning_rate_wv_space,
                                  memory_size_space=memory_size_space, fixed_std_space=std_space,
