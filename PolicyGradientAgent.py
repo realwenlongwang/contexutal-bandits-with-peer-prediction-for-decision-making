@@ -13,6 +13,9 @@ def gaussian(x, mu, sigma):
 class Agent:
 
     def __init__(self, feature_num, action_num, learning_rate_theta, name, algorithm='regular'):
+        self.theta_mean = np.zeros((feature_num * action_num, action_num))
+        # self.theta_mean = np.random.normal(0, np.sqrt(2/(feature_num * action_num)), (feature_num * action_num, action_num))
+        # self.theta_mean = np.array([[0.0, -1.2], [0.0, -1.2], [0.0, 0.0], [-1.2, 0.0], [-1.2, 0.0], [0.0, 0.0]])
         self.init_learning_rate_theta = learning_rate_theta
         self.learning_rate_theta = self.init_learning_rate_theta
         self.feature_num = feature_num
@@ -20,13 +23,16 @@ class Agent:
 
         # Performance record
         self.evaluating = False
-        self.bucket_name_list = list('bucket'+str(i) for i in range(self.action_num))
+        self.bucket_name_list = list('bucket' + str(i) for i in range(self.action_num))
         self.report_history_list = list()
         self.mean_gradients_history_list = list([] for i in range(action_num))
         self.mean_weights_history_list = list([] for i in range(action_num))
         self.reward_history_list = list()
         self.algorithm = algorithm
         self.name = name
+
+    def save_weights(self, file_name):
+        np.save(file_name, self.theta_mean)
 
     def learning_rate_decay(self, epoch, decay_rate):
         self.learning_rate_theta = 1 / (1 + decay_rate * epoch) * self.init_learning_rate_theta
@@ -41,18 +47,24 @@ class Agent:
         encoded_signal = np.zeros(shape=(1, self.feature_num * self.action_num))
         encoded_signal[0, bucket_no * self.feature_num + ball.value] = 1
         prior_index = np.arange(start=2, stop=self.feature_num * self.action_num, step=self.feature_num)
+
         encoded_signal[0, prior_index] = logit(current_prediction)
         return encoded_signal
 
-    # TODO: Fix the plots with new data structure
-    def mean_gradients_history_plot(self):
+    def mean_gradients_history_df(self):
         column_name_list = []
         for bucket_name in self.bucket_name_list:
             for feature_name in ['_red_ball', '_blue_ball', '_prior']:
-                column_name_list.append(bucket_name+feature_name)
+                column_name_list.append(bucket_name + feature_name)
         mean_gradients_df_list = []
         for bucket_no in range(self.action_num):
-            mean_gradients_df_list.append( pd.DataFrame(self.mean_gradients_history_list[bucket_no], columns=column_name_list))
+            mean_gradients_df_list.append(
+                pd.DataFrame(self.mean_gradients_history_list[bucket_no], columns=column_name_list))
+
+        return mean_gradients_df_list
+
+    def mean_gradients_history_plot(self):
+        mean_gradients_df_list = self.mean_gradients_history_df()
 
         for df, bucket_no in zip(mean_gradients_df_list, range(self.action_num)):
             fig, axs = plt.subplots(self.feature_num * self.action_num,
@@ -64,46 +76,63 @@ class Agent:
     def mean_gradients_successive_dot_product_plot(self, moving_size=1000):
         for bucket_no in range(self.action_num):
             grad_mean_successive_dot = np.sum(
-                self.mean_gradients_history_list[bucket_no] * np.roll(self.mean_gradients_history_list[bucket_no], 1, axis=0), axis=1)[1:]
+                self.mean_gradients_history_list[bucket_no] * np.roll(self.mean_gradients_history_list[bucket_no], 1,
+                                                                      axis=0), axis=1)[1:]
             fig, axs = plt.subplots(2, figsize=(18, 9))
             axs[0].plot(grad_mean_successive_dot[100:], zorder=-100)
-            axs[0].hlines(y=0, xmin=0, xmax=len(grad_mean_successive_dot), linestyles='dashdot', color='black', zorder=-99)
+            axs[0].hlines(y=0, xmin=0, xmax=len(grad_mean_successive_dot), linestyles='dashdot', color='black',
+                          zorder=-99)
             axs[0].set_title('Successive gradients dot product')
             axs[1].plot(uniform_filter1d(grad_mean_successive_dot[100:], size=moving_size), zorder=-100)
-            axs[1].hlines(y=0, xmin=0, xmax=len(grad_mean_successive_dot), linestyles='dashdot', color='black', zorder=-99)
+            axs[1].hlines(y=0, xmin=0, xmax=len(grad_mean_successive_dot), linestyles='dashdot', color='black',
+                          zorder=-99)
             axs[1].set_title(self.name + ' Successive gradients dot product size %i moving average' % moving_size)
             fig.suptitle('Bucket ' + str(bucket_no) + ' Successive Dot Product')
 
-    def mean_weights_history_plot(self):
+    def mean_weights_history_df(self):
         column_name_list = []
         for bucket_name in self.bucket_name_list:
             for feature_name in ['_red_ball', '_blue_ball', '_prior']:
-                column_name_list.append(bucket_name+feature_name)
+                column_name_list.append(bucket_name + feature_name)
 
         mean_weights_df_list = []
         for bucket_no in range(self.action_num):
-            mean_weights_df_list.append( pd.DataFrame(self.mean_weights_history_list[bucket_no], columns=column_name_list))
+            mean_weights_df_list.append(
+                pd.DataFrame(self.mean_weights_history_list[bucket_no], columns=column_name_list))
+
+        return mean_weights_df_list
+
+    def mean_weights_history_plot(self):
+        mean_weights_df_list = self.mean_weights_history_df()
 
         for df, title_no in zip(mean_weights_df_list, range(self.action_num)):
             fig, axs = plt.subplots(self.action_num, figsize=(18, 9 * self.action_num), squeeze=False)
             for bucket_no in range(self.action_num):
-                axs[bucket_no, 0].plot(df.iloc[1:, bucket_no * self.feature_num + 0], 'r', label='Bucket '+str(bucket_no)+' Red weight')
-                axs[bucket_no, 0].plot(df.iloc[1:, bucket_no * self.feature_num + 1], 'b', label='Bucket '+str(bucket_no)+'Blue weight')
-                axs[bucket_no, 0].plot(df.iloc[1:, bucket_no * self.feature_num + 2], 'g', label='Bucket '+str(bucket_no)+'Prior weight')
-                axs[bucket_no, 0].hlines(y=logit(self.pr_red_ball_red_bucket), xmin=0, xmax=len(df), colors='red',
-                           linestyles='dashdot')
-                axs[bucket_no, 0].annotate('%.3f' % logit(self.pr_red_ball_red_bucket),
-                             xy=(len(df) / 2, logit(self.pr_red_ball_red_bucket)),
-                             xytext=(len(df) / 2, np.log(2) / 2), arrowprops=dict(arrowstyle="->"))
-                axs[bucket_no, 0].hlines(y=logit(self.pr_red_ball_blue_bucket), xmin=0, xmax=len(df), colors='blue',
-                           linestyles='dashdot')
-                axs[bucket_no, 0].annotate('%.3f' % logit(self.pr_red_ball_blue_bucket),
-                             xy=(len(df) / 2, logit(self.pr_red_ball_blue_bucket)),
-                             xytext=(len(df) / 2, np.log(1 / 2) / 2), arrowprops=dict(arrowstyle="->"))
+                axs[bucket_no, 0].plot(df.iloc[1:, bucket_no * self.feature_num + 0], 'r',
+                                       label='Bucket ' + str(bucket_no) + ' Red weight')
+                axs[bucket_no, 0].plot(df.iloc[1:, bucket_no * self.feature_num + 1], 'b',
+                                       label='Bucket ' + str(bucket_no) + 'Blue weight')
+                axs[bucket_no, 0].plot(df.iloc[1:, bucket_no * self.feature_num + 2], 'g',
+                                       label='Bucket ' + str(bucket_no) + 'Prior weight')
+                axs[bucket_no, 0].hlines(y=np.log(self.pr_red_ball_red_bucket / self.pr_red_ball_blue_bucket), xmin=0,
+                                         xmax=len(df), colors='red',
+                                         linestyles='dashdot')
+                axs[bucket_no, 0].annotate('%.3f' % np.log(self.pr_red_ball_red_bucket / self.pr_red_ball_blue_bucket),
+                                           xy=(len(df) / 2,
+                                               np.log(self.pr_red_ball_red_bucket / self.pr_red_ball_blue_bucket)),
+                                           xytext=(len(df) / 2, np.log(2) / 2), arrowprops=dict(arrowstyle="->"))
+                axs[bucket_no, 0].hlines(
+                    y=np.log((1 - self.pr_red_ball_red_bucket) / (1 - self.pr_red_ball_blue_bucket)), xmin=0,
+                    xmax=len(df), colors='blue',
+                    linestyles='dashdot')
+                axs[bucket_no, 0].annotate(
+                    '%.3f' % np.log((1 - self.pr_red_ball_red_bucket) / (1 - self.pr_red_ball_blue_bucket)),
+                    xy=(len(df) / 2, np.log((1 - self.pr_red_ball_red_bucket) / (1 - self.pr_red_ball_blue_bucket))),
+                    xytext=(len(df) / 2, np.log(1 / 2) / 2), arrowprops=dict(arrowstyle="->"))
                 axs[bucket_no, 0].hlines(y=1, xmin=0, xmax=len(df), colors='green', linestyles='dashdot')
                 axs[bucket_no, 0].hlines(y=0, xmin=0, xmax=len(df), colors='black', linestyles='dashdot')
                 axs[bucket_no, 0].legend(loc='upper left')
-                fig.suptitle('Bucket '+str(title_no)+' Mean Weights History')
+                fig.suptitle('Bucket ' + str(title_no) + ' Mean Weights History')
 
 
 class StochasticGradientAgent(Agent):
@@ -113,10 +142,11 @@ class StochasticGradientAgent(Agent):
                  algorithm='regular'):
         # Actor weights
         super().__init__(feature_num, action_num, learning_rate_theta, name, algorithm)
-        self.theta_mean = np.zeros((feature_num * action_num, action_num))
+
         self.theta_std = np.zeros((feature_num * action_num, action_num))
         self.learning_std = learning_std
         self.fixed_std = fixed_std
+        self.std_learning_rate_mask = np.ones((1, action_num))
         # Critic weights
         self.w_v = np.zeros((feature_num * action_num, action_num))
         self.learning_rate_wv = learning_rate_wv
@@ -137,6 +167,10 @@ class StochasticGradientAgent(Agent):
         self.batch_size = batch_size
         self.memory_size = memory_size
 
+        # Evaluation
+        self.std_weights_history_list = list([] for i in range(action_num))
+        self.std_gradients_history_list = list([] for i in range(action_num))
+
     def report(self, bucket_no, ball_colour, current_prediction):
 
         signal = self.signal_encode(bucket_no, ball_colour, current_prediction)
@@ -144,8 +178,9 @@ class StochasticGradientAgent(Agent):
         mean_array = np.matmul(signal, self.theta_mean)
         if self.learning_std:
             std_array = np.exp(np.matmul(signal, self.theta_std))
+            self.std_learning_rate_mask = std_array > self.fixed_std
         else:
-            std_array = self.fixed_std
+            std_array = np.ones((1, self.action_num)) * self.fixed_std
 
         h_array = np.random.normal(loc=mean_array, scale=std_array)
 
@@ -158,15 +193,18 @@ class StochasticGradientAgent(Agent):
         if self.evaluating:
             self.report_history_list.append([bucket_no, ball_colour.name])
             self.reward_history_list.append([bucket_no, ball_colour.name])
-            for i, pr, h, mean in zip(range(self.action_num), current_prediction, h_array.ravel(), mean_array.ravel()):
+            for i, pr, h, mean, std in zip(range(self.action_num), current_prediction, h_array.ravel(),
+                                           mean_array.ravel(), std_array.ravel()):
                 self.report_history_list[-1].append(pr)
                 self.report_history_list[-1].append(expit(h))
                 self.report_history_list[-1].append(expit(mean))
                 if bucket_no == i:
-                    best_report = analytical_best_report(bucket_no, ball_colour, current_prediction, self.pr_red_ball_red_bucket, self.pr_red_ball_blue_bucket)
+                    best_report = analytical_best_report(bucket_no, ball_colour, current_prediction,
+                                                         self.pr_red_ball_red_bucket, self.pr_red_ball_blue_bucket)
                 else:
                     best_report = current_prediction[i]
                 self.report_history_list[-1].append(best_report)
+                self.report_history_list[-1].append(std)
         return signal, h_array, mean_array, std_array
 
     def __print_info(self, t):
@@ -188,12 +226,14 @@ class StochasticGradientAgent(Agent):
         idx = t % self.memory_size
         self.memory[idx, 0, :self.feature_num * self.action_num] = signal_array
         self.memory[idx, 0, self.feature_num * self.action_num:(self.feature_num + 1) * self.action_num] = h_array
-        self.memory[idx, 0, (self.feature_num + 1) * self.action_num:(self.feature_num + 2) * self.action_num] = mean_array
-        self.memory[idx, 0, (self.feature_num + 2) * self.action_num:(self.feature_num + 3) * self.action_num] = std_array
-        self.memory[idx, 0, (self.feature_num + 3) * self.action_num:(self.feature_num + 4) * self.action_num] = reward_array
+        self.memory[idx, 0,
+        (self.feature_num + 1) * self.action_num:(self.feature_num + 2) * self.action_num] = mean_array
+        self.memory[idx, 0,
+        (self.feature_num + 2) * self.action_num:(self.feature_num + 3) * self.action_num] = std_array
+        self.memory[idx, 0,
+        (self.feature_num + 3) * self.action_num:(self.feature_num + 4) * self.action_num] = reward_array
         self.memory[idx, 0, (self.feature_num + 4) * self.action_num:(self.feature_num + 5) * self.action_num] = delta
 
-        # TODO: Figure out how to modify here
         if self.evaluating:
             for bucket_no, reward, v in zip(range(self.action_num), reward_array.ravel(), v_array.ravel()):
                 self.reward_history_list[-1].append(reward)
@@ -205,18 +245,20 @@ class StochasticGradientAgent(Agent):
                 #     pr_red_ball_red_bucket=self.pr_red_ball_red_bucket,
                 #     pr_red_ball_blue_bucket=self.pr_red_ball_blue_bucket))
                 self.mean_weights_history_list[bucket_no].append(self.theta_mean[:, bucket_no].copy().ravel())
+                if self.learning_std:
+                    self.std_weights_history_list[bucket_no].append(self.theta_std[:, bucket_no].copy().ravel())
 
     def __sample_experience(self, t):
 
         if t < self.batch_size:
             return self.memory[:t + 1, :, :]
         elif self.batch_size <= t < self.memory_size:
-            idx = np.random.choice(t + 1, size=self.batch_size, replace=False)
-            # idx = np.random.randint(low=0, high=t + 1, size=self.batch_size) # with replacement but faster
+            # idx = np.random.choice(t + 1, size=self.batch_size, replace=False)
+            idx = np.random.randint(low=0, high=t + 1, size=self.batch_size)  # with replacement but faster
             return self.memory[idx, :, :]
         else:
-            idx = np.random.choice(self.memory_size, size=self.batch_size, replace=False)
-            # idx = np.random.randint(self.memory_size, size=self.batch_size) # with replacement but faster
+            # idx = np.random.choice(self.memory_size, size=self.batch_size, replace=False)
+            idx = np.random.randint(self.memory_size, size=self.batch_size)  # with replacement but faster
             return self.memory[idx, :, :]
 
     def batch_update(self, t):
@@ -279,22 +321,21 @@ class StochasticGradientAgent(Agent):
 
         self.theta_mean += self.learning_rate_theta * gradient_mean
         if self.learning_std:
-            self.theta_std += self.learning_rate_theta * gradient_std
+            self.theta_std += self.std_learning_rate_mask * self.learning_rate_theta * gradient_std
         self.__print_info(t)
 
         self.w_v += self.learning_rate_wv * gradient_v
 
-        if not self.learning_std:
-            gradient_std = np.zeros(self.theta_std.shape)
-
         if self.evaluating:
             for bucket_no in range(self.action_num):
                 self.mean_gradients_history_list[bucket_no].append(gradient_mean[:, bucket_no].ravel())
+                if self.learning_std:
+                    self.std_gradients_history_list[bucket_no].append(gradient_std[:, bucket_no].ravel())
 
     def reward_history_dataframe(self):
         column_list = ['bucket_no', 'signal']
         for bucket_no in range(self.action_num):
-            column_list.append('bucket_'+str(bucket_no)+'_reward')
+            column_list.append('bucket_' + str(bucket_no) + '_reward')
             column_list.append('bucket_' + str(bucket_no) + '_v')
         reward_history_df = pd.DataFrame(self.reward_history_list,
                                          columns=column_list)
@@ -306,27 +347,51 @@ class StochasticGradientAgent(Agent):
             fig, axs = plt.subplots(2, figsize=(15, 4 * 2))
             reward_column_name = 'bucket_' + str(bucket_no) + '_reward'
             v_column_name = 'bucket_' + str(bucket_no) + '_v'
-            axs[0].scatter(x=reward_history_df.index, y=reward_history_df[reward_column_name], label=reward_column_name,
-                           marker='.', s=3)
             axs[0].hlines(y=0.0, xmin=0, xmax=reward_history_df.shape[0], colors='black', linestyles='dashdot')
-            axs[1].hlines(y=0.0, xmin=0, xmax=reward_history_df.shape[0], colors='black', linestyles='dashdot')
-            axs[1].plot(reward_history_df[v_column_name], label=v_column_name)
-            axs[1].plot(reward_history_df[reward_column_name].expanding().mean(), zorder=-99, label='Average '+reward_column_name)
+            axs[0].plot(reward_history_df[v_column_name], label=v_column_name)
+            axs[0].plot(reward_history_df[reward_column_name].expanding().mean(), zorder=-99,
+                        label='Average ' + reward_column_name)
+            last_quarter_num = len(reward_history_df) // 4
+            axs[1].hlines(y=0.0, xmin=last_quarter_num, xmax=reward_history_df.shape[0], colors='black',
+                          linestyles='dashdot')
+            axs[1].plot(reward_history_df.tail(last_quarter_num)[v_column_name], label=v_column_name)
+            axs[1].plot(reward_history_df.tail(last_quarter_num)[reward_column_name].expanding().mean(), zorder=-99,
+                        label='Last Quarter Average ' + reward_column_name)
+            axs[1].annotate('%.3f' % reward_history_df.tail().mean(),
+                            xy=(len(reward_history_df), reward_history_df.tail().mean()),
+                            # xytext=(len(reward_history_df) / 2, np.log(2) / 2),
+                            arrowprops=dict(arrowstyle="->"))
             fig.legend(loc='upper right')
             fig.suptitle(self.name + ' Reward History')
 
     def report_history_dataframe(self):
         column_list = ['bucket_no', 'signal']
         for bucket_no in range(self.action_num):
-            column_list.append('bucket_'+str(bucket_no)+'_prior')
+            column_list.append('bucket_' + str(bucket_no) + '_prior')
             column_list.append('bucket_' + str(bucket_no) + '_report')
             column_list.append('bucket_' + str(bucket_no) + '_mean')
             column_list.append('bucket_' + str(bucket_no) + '_best')
+            column_list.append('bucket_' + str(bucket_no) + '_std')
         report_history_df = pd.DataFrame(self.report_history_list,
                                          columns=column_list)
 
         return report_history_df
 
+    def std_history_plot(self):
+        if self.learning_std:
+            report_history_df = self.report_history_dataframe()
+            for bucket_no in range(self.action_num):
+                column_name = 'bucket_' + str(bucket_no) + '_std'
+                fig, ax = plt.subplots(figsize=(15, 4))
+                ax.plot(report_history_df[column_name])
+                ax.annotate('%.3f' % report_history_df.loc[report_history_df.index[-1], column_name],
+                            xy=(
+                            len(report_history_df), report_history_df.loc[report_history_df.index[-1], column_name]),
+                            xytext=(len(report_history_df), 0.5), arrowprops=dict(arrowstyle="->"))
+                # ax.legend(loc='lower left')
+                fig.suptitle(column_name)
+
+    # TODO: Make the report plots dependent on signal
     # TODO: Outdated. Not useful at the moment. Consider remove in the future
     def report_history_plot(self):
         report_history_df = self.report_history_dataframe()
@@ -357,6 +422,33 @@ class StochasticGradientAgent(Agent):
                 ax.legend(loc='lower left')
             fig.suptitle('Bucket ' + str(bucket_no) + ' Mean History')
 
+    def std_gradients_history_df(self):
+        if self.learning_std:
+            column_name_list = []
+            for bucket_name in self.bucket_name_list:
+                for feature_name in ['_red_ball', '_blue_ball', '_prior']:
+                    column_name_list.append(bucket_name + feature_name)
+            std_gradients_df_list = []
+            for bucket_no in range(self.action_num):
+                std_gradients_df_list.append(
+                    pd.DataFrame(self.std_gradients_history_list[bucket_no], columns=column_name_list))
+            return std_gradients_df_list
+        else:
+            pass
+
+    def std_gradients_history_plot(self):
+        if self.learning_std:
+            mean_gradients_df_list = self.mean_gradients_history_df()
+
+            for df, bucket_no in zip(mean_gradients_df_list, range(self.action_num)):
+                fig, axs = plt.subplots(self.feature_num * self.action_num,
+                                        figsize=(18, 9 * self.feature_num * self.action_num))
+                gradients_box_subplot(df=df.iloc[100:, :], column_list=df.columns,
+                                      colour_list=['red', 'blue', 'green', 'magenta', 'indigo', 'cyan'], axs=axs)
+                fig.suptitle('Bucket ' + str(bucket_no) + " Mean Gradients History")
+        else:
+            pass
+
 
 class DeterministicGradientAgent(Agent):
 
@@ -365,7 +457,7 @@ class DeterministicGradientAgent(Agent):
                  beta2=0.999, epsilon=1e-8, name='agent', algorithm='regular'):
         # Actor weights
         super().__init__(feature_num, action_num, learning_rate_theta, name, algorithm)
-        self.theta_mean = np.zeros((feature_num * action_num, action_num))
+        # self.theta_mean = np.zeros((feature_num * action_num, action_num))
 
         # Critic weights
         self.w_q = np.zeros((feature_num * action_num, action_num))
@@ -389,6 +481,12 @@ class DeterministicGradientAgent(Agent):
         self.batch_size = batch_size
         self.memory_size = memory_size
 
+        # Evaluation
+        self.q_gradients_history_list = list([] for i in range(action_num))
+        self.q_weights_history_list = list([] for i in range(action_num))
+        self.v_gradients_history_list = list([] for i in range(action_num))
+        self.v_weights_history_list = list([] for i in range(action_num))
+
     def report(self, bucket_no, ball_colour, current_prediction):
 
         signal = self.signal_encode(bucket_no, ball_colour, current_prediction)
@@ -406,7 +504,8 @@ class DeterministicGradientAgent(Agent):
                 self.report_history_list[-1].append(pr)
                 self.report_history_list[-1].append(expit(mean))
                 if bucket_no == i:
-                    best_report = analytical_best_report(bucket_no, ball_colour, current_prediction, self.pr_red_ball_red_bucket, self.pr_red_ball_blue_bucket)
+                    best_report = analytical_best_report(bucket_no, ball_colour, current_prediction,
+                                                         self.pr_red_ball_red_bucket, self.pr_red_ball_blue_bucket)
                 else:
                     best_report = current_prediction[i]
                 self.report_history_list[-1].append(best_report)
@@ -424,7 +523,7 @@ class DeterministicGradientAgent(Agent):
 
         idx = t % self.memory_size
 
-        phi_array = np.multiply(signal_array.T, (h_array - mean_array))
+        phi_array = np.matmul(signal_array.T, (h_array - mean_array))
 
         v_array = np.matmul(signal_array, self.w_v)
         q_array = np.sum(phi_array * self.w_q, axis=0, keepdims=True) + v_array
@@ -437,7 +536,8 @@ class DeterministicGradientAgent(Agent):
         # self.memory[idx, 11:] = self.w_v
 
         if self.evaluating:
-            for bucket_no, reward, v, q in zip(range(self.action_num), reward_array.ravel(), v_array.ravel(), q_array.ravel()):
+            for bucket_no, reward, v, q in zip(range(self.action_num), reward_array.ravel(), v_array.ravel(),
+                                               q_array.ravel()):
                 self.reward_history_list[-1].append(reward)
                 self.reward_history_list[-1].append(v)
                 self.reward_history_list[-1].append(q)
@@ -448,19 +548,21 @@ class DeterministicGradientAgent(Agent):
                 #     pr_red_ball_red_bucket=self.pr_red_ball_red_bucket,
                 #     pr_red_ball_blue_bucket=self.pr_red_ball_blue_bucket))
                 self.mean_weights_history_list[bucket_no].append(self.theta_mean[:, bucket_no].copy().ravel())
+                self.v_weights_history_list[bucket_no].append(self.w_v[:, bucket_no].copy().ravel())
+                self.q_weights_history_list[bucket_no].append(self.w_q[:, bucket_no].copy().ravel())
 
     def __sample_experience_index(self, t):
 
         if t < self.batch_size:
-            return np.arange(t+1)
+            return np.arange(t + 1)
         elif self.batch_size <= t < self.memory_size:
-            idx = np.random.choice(t + 1, size=self.batch_size, replace=False)  # True means a value can be selected multiple times
-            # idx = np.random.randint(low=0, high=t + 1, size=self.batch_size)
+            # idx = np.random.choice(t + 1, size=self.batch_size, replace=False)  # True means a value can be selected multiple times
+            idx = np.random.randint(low=0, high=t + 1, size=self.batch_size)
             idx = np.arange(self.batch_size)
             return idx
         else:
-            idx = np.random.choice(self.memory_size, size=self.batch_size, replace=False)
-            # idx = np.random.randint(self.memory_size, size=self.batch_size)
+            # idx = np.random.choice(self.memory_size, size=self.batch_size, replace=False)
+            idx = np.random.randint(self.memory_size, size=self.batch_size)
             idx = np.arange(self.batch_size)
             return idx
 
@@ -520,11 +622,13 @@ class DeterministicGradientAgent(Agent):
         if self.evaluating:
             for bucket_no in range(self.action_num):
                 self.mean_gradients_history_list[bucket_no].append(gradient_mean[:, bucket_no].ravel())
+                self.v_gradients_history_list[bucket_no].append(gradient_v[:, bucket_no].ravel())
+                self.q_gradients_history_list[bucket_no].append(gradient_q[:, bucket_no].ravel())
 
     def reward_history_dataframe(self):
         column_list = ['bucket_no', 'signal']
         for bucket_no in range(self.action_num):
-            column_list.append('bucket_'+str(bucket_no)+'_reward')
+            column_list.append('bucket_' + str(bucket_no) + '_reward')
             column_list.append('bucket_' + str(bucket_no) + '_v')
             column_list.append('bucket_' + str(bucket_no) + '_q')
         reward_history_df = pd.DataFrame(self.reward_history_list,
@@ -546,7 +650,8 @@ class DeterministicGradientAgent(Agent):
             axs[1].plot(reward_history_df[v_column_name], zorder=-98, alpha=0.8, label=v_column_name)
             # axs[1].scatter(x=reward_history_df.index, y=reward_history_df[q_column_name], label=q_column_name,
             #                marker='.', s=3, alpha=0.8, zorder=-98, color='orange')
-            axs[1].plot(reward_history_df[reward_column_name].expanding().mean(), zorder=-97, label='Average '+reward_column_name)
+            axs[1].plot(reward_history_df[reward_column_name].expanding().mean(), zorder=-97,
+                        label='Average ' + reward_column_name)
             fig.legend(loc='upper right')
             fig.suptitle(self.name + ' Reward History')
 
@@ -559,3 +664,111 @@ class DeterministicGradientAgent(Agent):
         blue_line = mlines.Line2D([], [], color='blue', label='blue signal_array')
         ax.legend(handles=[red_line, blue_line], loc='lower left')
         plt.title(self.name + ' Mean History')
+
+    def gradients_history_df(self, name):
+        if name == 'v':
+            gradients_history_list = self.v_gradients_history_list
+        elif name == 'q':
+            gradients_history_list = self.q_gradients_history_list
+        else:
+            raise ValueError('Wrong name')
+        column_name_list = []
+        for bucket_name in self.bucket_name_list:
+            for feature_name in ['_red_ball', '_blue_ball', '_prior']:
+                column_name_list.append(bucket_name + feature_name)
+        gradients_df_list = []
+        for bucket_no in range(self.action_num):
+            gradients_df_list.append(
+                pd.DataFrame(gradients_history_list[bucket_no], columns=column_name_list))
+
+        return gradients_df_list
+
+    def gradients_history_plot(self, name):
+        try:
+            gradients_df_list = self.gradients_history_df(name)
+        except ValueError:
+            raise
+
+        for df, bucket_no in zip(gradients_df_list, range(self.action_num)):
+            fig, axs = plt.subplots(self.feature_num * self.action_num,
+                                    figsize=(18, 9 * self.feature_num * self.action_num))
+            gradients_box_subplot(df=df.iloc[100:, :], column_list=df.columns,
+                                  colour_list=['red', 'blue', 'green', 'magenta', 'indigo', 'cyan'], axs=axs)
+            fig.suptitle('Bucket ' + str(bucket_no) + " Mean Gradients History")
+
+    def gradients_successive_dot_product_plot(self, name, moving_size=1000):
+        if name == 'v':
+            gradients_history_list = self.v_gradients_history_list
+        elif name == 'q':
+            gradients_history_list = self.q_gradients_history_list
+        else:
+            raise ValueError('Wrong name')
+        for bucket_no in range(self.action_num):
+            grad_v_successive_dot = np.sum(
+                gradients_history_list[bucket_no] * np.roll(gradients_history_list[bucket_no], 1,
+                                                            axis=0), axis=1)[1:]
+            fig, axs = plt.subplots(2, figsize=(18, 9))
+            axs[0].plot(grad_v_successive_dot[100:], zorder=-100)
+            axs[0].hlines(y=0, xmin=0, xmax=len(grad_v_successive_dot), linestyles='dashdot', color='black',
+                          zorder=-99)
+            axs[0].set_title('Successive gradients dot product')
+            axs[1].plot(uniform_filter1d(grad_v_successive_dot[100:], size=moving_size), zorder=-100)
+            axs[1].hlines(y=0, xmin=0, xmax=len(grad_v_successive_dot), linestyles='dashdot', color='black',
+                          zorder=-99)
+            axs[1].set_title(self.name + ' Successive gradients dot product size %i moving average' % moving_size)
+            fig.suptitle('Bucket ' + str(bucket_no) + ' Successive Dot Product')
+
+    def weights_history_df(self, name):
+        if name == 'v':
+            weights_history_list = self.v_weights_history_list
+        elif name == 'q':
+            weights_history_list = self.q_weights_history_list
+        else:
+            raise ValueError('Wrong name')
+        column_name_list = []
+        for bucket_name in self.bucket_name_list:
+            for feature_name in ['_red_ball', '_blue_ball', '_prior']:
+                column_name_list.append(bucket_name + feature_name)
+
+        weights_df_list = []
+        for bucket_no in range(self.action_num):
+            weights_df_list.append(
+                pd.DataFrame(weights_history_list[bucket_no], columns=column_name_list))
+
+        return weights_df_list
+
+    def weights_history_plot(self, name):
+
+        try:
+            weights_df_list = self.weights_history_df(name)
+        except ValueError:
+            raise
+
+        for df, title_no in zip(weights_df_list, range(self.action_num)):
+            fig, axs = plt.subplots(self.action_num, figsize=(18, 9 * self.action_num), squeeze=False)
+            for bucket_no in range(self.action_num):
+                axs[bucket_no, 0].plot(uniform_filter1d(df.iloc[1:, bucket_no * self.feature_num + 0], size=1000), 'r',
+                                       label='Bucket ' + str(bucket_no) + ' Red weight')
+                axs[bucket_no, 0].plot(uniform_filter1d(df.iloc[1:, bucket_no * self.feature_num + 1], size=1000), 'b',
+                                       label='Bucket ' + str(bucket_no) + 'Blue weight')
+                axs[bucket_no, 0].plot(uniform_filter1d(df.iloc[1:, bucket_no * self.feature_num + 2], size=1000), 'g',
+                                       label='Bucket ' + str(bucket_no) + 'Prior weight')
+                axs[bucket_no, 0].hlines(y=np.log(self.pr_red_ball_red_bucket / self.pr_red_ball_blue_bucket), xmin=0,
+                                         xmax=len(df), colors='red',
+                                         linestyles='dashdot')
+                axs[bucket_no, 0].annotate('%.3f' % np.log(self.pr_red_ball_red_bucket / self.pr_red_ball_blue_bucket),
+                                           xy=(len(df) / 2,
+                                               np.log(self.pr_red_ball_red_bucket / self.pr_red_ball_blue_bucket)),
+                                           xytext=(len(df) / 2, np.log(2) / 2), arrowprops=dict(arrowstyle="->"))
+                axs[bucket_no, 0].hlines(
+                    y=np.log((1 - self.pr_red_ball_red_bucket) / (1 - self.pr_red_ball_blue_bucket)), xmin=0,
+                    xmax=len(df), colors='blue',
+                    linestyles='dashdot')
+                axs[bucket_no, 0].annotate(
+                    '%.3f' % np.log((1 - self.pr_red_ball_red_bucket) / (1 - self.pr_red_ball_blue_bucket)),
+                    xy=(len(df) / 2, np.log((1 - self.pr_red_ball_red_bucket) / (1 - self.pr_red_ball_blue_bucket))),
+                    xytext=(len(df) / 2, np.log(1 / 2) / 2), arrowprops=dict(arrowstyle="->"))
+                axs[bucket_no, 0].hlines(y=1, xmin=0, xmax=len(df), colors='green', linestyles='dashdot')
+                axs[bucket_no, 0].hlines(y=0, xmin=0, xmax=len(df), colors='black', linestyles='dashdot')
+                axs[bucket_no, 0].legend(loc='upper left')
+                fig.suptitle('Bucket ' + str(title_no) + ' Mean Weights History')

@@ -6,7 +6,7 @@ from tqdm.notebook import tnrange
 from PolicyGradientAgent import StochasticGradientAgent, DeterministicGradientAgent
 
 
-def stochastic_training_notebook(learning_rate_theta, learning_rate_wv,
+def stochastic_training_notebook(agent_list, learning_rate_theta, learning_rate_wv,
                                  memory_size, batch_size, training_episodes,
                                  decay_rate, beta1, beta2, algorithm, learning_std,
                                  fixed_std, pr_red_ball_red_bucket, pr_red_ball_blue_bucket,
@@ -28,22 +28,21 @@ def stochastic_training_notebook(learning_rate_theta, learning_rate_wv,
     # pr_red_ball_blue_bucket = 1 / 3
     # prior_red_list = [3 / 4, 1 / 4]
     # agent_num = 2
-    agent_list = []
 
-    for i in range(agent_num):
-        agent = StochasticGradientAgent(feature_num=3, action_num=action_num,
-                                        learning_rate_theta=learning_rate_theta, learning_rate_wv=learning_rate_wv,
-                                        memory_size=memory_size, batch_size=batch_size, beta1=beta1, beta2=beta2,
-                                        learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
-                                        algorithm=algorithm)
-        agent_list.append(agent)
-        agent.evaluation_init(pr_red_ball_red_bucket=pr_red_ball_red_bucket,
-                              pr_red_ball_blue_bucket=pr_red_ball_blue_bucket)
+    if not agent_list:
+        for i in range(agent_num):
+            agent = StochasticGradientAgent(feature_num=3, action_num=action_num,
+                                            learning_rate_theta=learning_rate_theta, learning_rate_wv=learning_rate_wv,
+                                            memory_size=memory_size, batch_size=batch_size, beta1=beta1, beta2=beta2,
+                                            learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
+                                            algorithm=algorithm)
+            agent.evaluation_init(pr_red_ball_red_bucket=pr_red_ball_red_bucket,
+                                  pr_red_ball_blue_bucket=pr_red_ball_blue_bucket)
+            agent_list.append(agent)
 
     for t in tnrange(training_episodes):
         stochastic_iterative_policy(action_num, prior_red_list, pr_red_ball_red_bucket, pr_red_ball_blue_bucket, agent_list, t, decay_rate, score_func, decision_rule, preferred_colour_pr_list)
 
-    return agent_list
 
 
 def stochastic_training(learning_rate_theta, learning_rate_wv,
@@ -70,11 +69,14 @@ def stochastic_training(learning_rate_theta, learning_rate_wv,
 
 
 def stochastic_iterative_policy(action_num, prior_red_list, pr_red_ball_red_bucket, pr_red_ball_blue_bucket, agent_list, t, decay_rate, score_func, decision_rule, preferred_colour_pr_list):
-    prior_red_instances = np.random.choice(prior_red_list, size=action_num)
-    #     prior_red = np.random.uniform()
+    if prior_red_list is None:
+        prior_red_instances = np.random.uniform(size=action_num)
+    else:
+        prior_red_instances = np.random.choice(prior_red_list, size=action_num)
+
     buckets = MultiBuckets(action_num, prior_red_instances, pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
     # pm = PredictionMarket(0, prior_red=prior_red)
-    dm = DecisionMarket(action_num, prior_red_instances, decision_rule, preferred_colour=BucketColour.RED, preferred_colour_pr_list=preferred_colour_pr_list)
+    dm = DecisionMarket(action_num, prior_red_instances, decision_rule , preferred_colour=BucketColour.RED, preferred_colour_pr_list=preferred_colour_pr_list)
 
     for agent in agent_list:
         bucket_no, ball_colour = buckets.signal()
@@ -200,61 +202,79 @@ def deterministic_iterative_policy(action_num, prior_red_list, pr_red_ball_red_b
 
 
 if __name__ == '__main__':
-    # learning_rate_theta = 1e-4
-    # learning_rate_wv = 0  # 1e-4
-    # memory_size = 16
-    # batch_size = 16
-    # training_episodes = 300000
-    # decay_rate = 0
-    # beta1 = 0.9
-    # beta2 = 0.9999
-    # # Algorithm: adam, momentum, regular
-    # algorithm = 'regular'
-    # learning_std = False
-    # fixed_std = 0.3
-    # # Bucket parameters
-    # pr_red_ball_red_bucket = 2 / 3
-    # pr_red_ball_blue_bucket = 1 / 3
-    # prior_red_list = [3 / 4, 1 / 4]
-    # agent_num = 1
-    # action_num = 2
-    # preferred_colour_pr_list = [0.8, 0.2]
-    # score_func = ScoreFunction.LOG
-    # decision_rule = DecisionRule.DETERMINISTIC
-    #
-    # stochastic_training(learning_rate_theta, learning_rate_wv,
-    #                                           memory_size, batch_size, training_episodes,
-    #                                           decay_rate, beta1, beta2, algorithm, learning_std,
-    #                                           fixed_std, pr_red_ball_red_bucket, pr_red_ball_blue_bucket,
-    #                                           prior_red_list, agent_num, action_num, score_func, decision_rule, preferred_colour_pr_list)
-
-
-    feature_num = 3
-    action_num = 2
     learning_rate_theta = 1e-4
-    decay_rate = 0  # 0.001
-    learning_rate_wv = 1e-4
-    learning_rate_wq = 1e-2
+    learning_rate_wv = 0  # 1e-4
     memory_size = 16
     batch_size = 16
-    training_episodes = 900000
+    training_episodes = 300000
+    decay_rate = 0
     beta1 = 0.9
     beta2 = 0.9999
-    fixed_std = 0.3
     # Algorithm: adam, momentum, regular
     algorithm = 'regular'
+    learning_std = False
+    fixed_std = 0.3
     # Bucket parameters
-    prior_red_list = [3 / 4, 1 / 4]
     pr_red_ball_red_bucket = 2 / 3
     pr_red_ball_blue_bucket = 1 / 3
+    prior_red_list = [3 / 4, 1 / 4]
     agent_num = 1
-
-    explorer_learning = False
-    decision_rule = DecisionRule.STOCHASTIC
+    action_num = 2
     preferred_colour_pr_list = [0.8, 0.2]
+    score_func = ScoreFunction.LOG
+    decision_rule = DecisionRule.DETERMINISTIC
 
-    agent_list = deterministic_training(feature_num, action_num, learning_rate_theta, learning_rate_wv, learning_rate_wq,
-                                                 memory_size, batch_size, training_episodes,
-                                                 decay_rate, beta1, beta2, algorithm, pr_red_ball_red_bucket,
-                                                 pr_red_ball_blue_bucket, prior_red_list, agent_num,
-                                                 explorer_learning, fixed_std, decision_rule, preferred_colour_pr_list)
+    stochastic_training(learning_rate_theta, learning_rate_wv,
+                                              memory_size, batch_size, training_episodes,
+                                              decay_rate, beta1, beta2, algorithm, learning_std,
+                                              fixed_std, pr_red_ball_red_bucket, pr_red_ball_blue_bucket,
+                                              prior_red_list, agent_num, action_num, score_func, decision_rule, preferred_colour_pr_list)
+
+
+    # feature_num = 3
+    # action_num = 2
+    # learning_rate_theta = 1e-4
+    # decay_rate = 0  # 0.001
+    # learning_rate_wv = 1e-4
+    # learning_rate_wq = 1e-2
+    # memory_size = 16
+    # batch_size = 16
+    # training_episodes = 900000
+    # beta1 = 0.9
+    # beta2 = 0.9999
+    # fixed_std = 0.3
+    # # Algorithm: adam, momentum, regular
+    # algorithm = 'regular'
+    # # Bucket parameters
+    # prior_red_list = [3 / 4, 1 / 4]
+    # pr_red_ball_red_bucket = 2 / 3
+    # pr_red_ball_blue_bucket = 1 / 3
+    # agent_num = 1
+    #
+    # explorer_learning = False
+    # decision_rule = DecisionRule.STOCHASTIC
+    # preferred_colour_pr_list = [0.8, 0.2]
+    #
+    # agent_list = deterministic_training(feature_num, action_num, learning_rate_theta, learning_rate_wv, learning_rate_wq,
+    #                                              memory_size, batch_size, training_episodes,
+    #                                              decay_rate, beta1, beta2, algorithm, pr_red_ball_red_bucket,
+    #                                              pr_red_ball_blue_bucket, prior_red_list, agent_num,
+    #                                              explorer_learning, fixed_std, decision_rule, preferred_colour_pr_list)
+
+    # pr_ru1 = 1 / 4
+    # pr_ru2 = 3 / 4
+    # pr_bs_ru = 1 / 3
+    # pr_bs_bu = 2 / 3
+    # r1v, r2v, z = dm_expected_log_reward_blue_ball(pr_ru1, pr_ru2, pr_bs_ru, pr_bs_bu)
+    #
+    # fig = plt.figure()
+    # ax = plt.axes(projection='3d')
+    # # ax.contour3D(r1v, r2v, z, 100, cmap='binary')
+    # ax.plot_surface(r1v, r2v, z, rstride=1, cstride=1,
+    #                 cmap='viridis', edgecolor='none')
+    # ax.set_xlabel('r1')
+    # ax.set_ylabel('r2')
+    # ax.set_zlabel('expectation')
+    # ax.view_init(90, 60)
+    #
+    # plt.show()

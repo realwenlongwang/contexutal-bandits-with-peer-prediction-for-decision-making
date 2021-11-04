@@ -175,7 +175,8 @@ class Explorer:
 
     def update(self, reward, signal_array):
         if self.learning:
-            gradient_std = np.matmul(signal_array, reward * (np.power(self.h_array - self.mean_array, 2) / np.power(self.std_array, 2) - 1))
+            gradient_std = np.matmul(signal_array, reward * (
+                        np.power(self.h_array - self.mean_array, 2) / np.power(self.std_array, 2) - 1))
             self.theta_std += self.learning_rate * gradient_std
 
 
@@ -207,9 +208,9 @@ def analytical_best_report_ru_bs(pr_ru, pr_bs_ru, pr_bs_bu):
         Conditional probability of red urn given blue ball signal_array
     """
 
-    joint_distribution_ru_rs = pr_ru * pr_bs_ru
-    joint_distribution_bu_rs = (1 - pr_ru) * pr_bs_bu
-    return joint_distribution_ru_rs / (joint_distribution_ru_rs + joint_distribution_bu_rs)
+    joint_distribution_ru_bs = pr_ru * pr_bs_ru
+    joint_distribution_bu_bs = (1 - pr_ru) * pr_bs_bu
+    return joint_distribution_ru_bs / (joint_distribution_ru_bs + joint_distribution_bu_bs)
 
 
 def expected_log_reward_red_ball(actual_pr_ru_rs, estimated_pr_ru_rs, pr_ru):
@@ -228,7 +229,7 @@ def expected_log_reward_red_ball(actual_pr_ru_rs, estimated_pr_ru_rs, pr_ru):
             np.log(1 - estimated_pr_ru_rs) - np.log(1 - pr_ru))
 
 
-def expected_quodratic_reward_red_ball(actual_pr_ru_rs, estimated_pr_ru_rs, pr_ru):
+def expected_quadratic_reward_red_ball(actual_pr_ru_rs, estimated_pr_ru_rs, pr_ru):
     """
     This function compute the expected logarithmic reward_array given a red ball signal_array
     :param actual_pr_ru_rs: float
@@ -340,6 +341,30 @@ def gradients_box_plot(df, bins, col_name, color, ax):
 def gradients_box_subplot(df, column_list, colour_list, axs):
     for col_name, ax, colour in zip(column_list, axs, colour_list):
         gradients_box_plot(df, bins=10, col_name=col_name, color=colour, ax=ax)
+
+
+def dm_expected_log_reward_red_ball(pr_ru1, pr_ru2, pr_rs_ru, pr_rs_bu):
+    r1 = np.linspace(start=0.01, stop=0.99, num=50)
+    r2 = np.linspace(start=0.01, stop=0.99, num=50)
+    r1v, r2v = np.meshgrid(r1, r2)
+    actual_pr_ru_rs1 = analytical_best_report_ru_rs(pr_ru=pr_ru1, pr_rs_ru=pr_rs_ru, pr_rs_bu=pr_rs_bu)
+    actual_pr_ru_rs2 = analytical_best_report_ru_rs(pr_ru=pr_ru2, pr_rs_ru=pr_rs_ru, pr_rs_bu=pr_rs_bu)
+    rv = r1v * (r1v > r2v) + r2v * (r1v <= r2v)
+    actual_pr_ru_rsv = actual_pr_ru_rs1 * (r1v > r2v) + pr_ru2 * (r1v <= r2v)
+    pr_ruv = pr_ru1 * (r1v > r2v) + pr_ru2 * (r1v <= r2v)
+    return r1v, r2v, expected_log_reward_red_ball(actual_pr_ru_rs=actual_pr_ru_rsv, estimated_pr_ru_rs=rv, pr_ru=pr_ruv)
+
+
+def dm_expected_log_reward_blue_ball(pr_ru1, pr_ru2, pr_bs_ru, pr_bs_bu):
+    r1 = np.linspace(start=0.01, stop=0.99, num=50)
+    r2 = np.linspace(start=0.01, stop=0.99, num=50)
+    r1v, r2v = np.meshgrid(r1, r2)
+    actual_pr_ru_bs1 = analytical_best_report_ru_bs(pr_ru=pr_ru1, pr_bs_ru=pr_bs_ru, pr_bs_bu=pr_bs_bu)
+    actual_pr_ru_bs2 = analytical_best_report_ru_bs(pr_ru=pr_ru2, pr_bs_ru=pr_bs_ru, pr_bs_bu=pr_bs_bu)
+    rv = r1v * (r1v > r2v) + r2v * (r1v <= r2v)
+    actual_pr_ru_bsv = actual_pr_ru_bs1 * (r1v > r2v) + pr_ru2 * (r1v <= r2v)
+    pr_ruv = pr_ru1 * (r1v > r2v) + pr_ru2 * (r1v <= r2v)
+    return r1v, r2v, expected_log_reward_blue_ball(actual_pr_ru_bs=actual_pr_ru_bsv, estimated_pr_ru_bs=rv, pr_ru=pr_ruv)
 
 
 bucket_colour_to_num = {'red_bucket': 0, 'blue_bucket': 1}
