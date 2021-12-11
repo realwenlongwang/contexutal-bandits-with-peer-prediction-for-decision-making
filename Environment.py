@@ -37,24 +37,29 @@ class PredictionMarket:
 
     def __init__(self, no, prior_red):
         self.no = no
-        self.init_prediction = [prior_red, 1 - prior_red]
-        self.current_prediction = self.init_prediction.copy()
-        self.previous_prediction = self.current_prediction.copy()
+        self.current_prediction = [prior_red, 1 - prior_red]
+        self.prediction_history = [self.current_prediction.copy()]
+
 
     def report(self, prediction):
         assert sum(prediction) == 1, print('Probabilities not sum to one!', prediction)
         # Record the contract if multiple traders.
-        self.previous_prediction = self.current_prediction.copy()
+        self.prediction_history.append(prediction.copy())
         self.current_prediction = prediction.copy()
 
     def log_resolve(self, materialised_index):
-        scores = np.log(self.current_prediction) - np.log(self.previous_prediction)
-        return scores[materialised_index]
+        score_list = []
+        for i in range(len(self.prediction_history) - 1): # minus the initial report
+            scores = np.log(self.prediction_history[i+1]) - np.log(self.prediction_history[i])
+            score_list.append(scores.copy()[materialised_index])
+        return np.array(score_list)
 
+    # TODO: update the brier score
     def brier_resolve(self, materialised_index):
-        current_scores = self.current_prediction[materialised_index] - np.sum(np.square(self.current_prediction)) / 2
-        previous_scores = self.previous_prediction[materialised_index] - np.sum(np.square(self.previous_prediction)) / 2
-        return current_scores - previous_scores
+        return []
+    #     current_scores = self.current_prediction[materialised_index] - np.sum(np.square(self.current_prediction)) / 2
+    #     previous_scores = self.previous_prediction[materialised_index] - np.sum(np.square(self.previous_prediction)) / 2
+    #     return current_scores - previous_scores
 
     def resolve(self, score_func, materialised_index):
         if score_func == ScoreFunction.LOG:
@@ -84,9 +89,10 @@ class DecisionMarket:
             current_price_list = self.read_current_pred()
             index = np.argmax(current_price_list)
             conditional_market, bucket = self.conditional_market_list[index], buckets[index]
-            reward_array = np.zeros(shape=(1, self.conditional_market_num))
-            reward_array[0, index] = conditional_market.log_resolve(bucket.colour.value)
-            return reward_array
+            agent_num = len(conditional_market.prediction_history) - 1  # minus the initial report
+            reward_array = np.zeros(shape=(agent_num, self.conditional_market_num))
+            reward_array[:, index] = conditional_market.log_resolve(bucket.colour.value)
+            return reward_array, index
         else:
             # TODO: consider move the generator initialisation outside and init once only. May speed up training.
             generator = Generator(PCG64())
@@ -96,9 +102,10 @@ class DecisionMarket:
                                                       p=self.preferred_colour_pr_list)
             index = conditional_market.no
             bucket = buckets[index]
-            reward_array = np.zeros(shape=(1, self.conditional_market_num))
-            reward_array[0, index] = conditional_market.log_resolve(bucket.colour.value) / pr
-            return reward_array
+            agent_num = len(conditional_market.prediction_history) - 1 # minus the initial report
+            reward_array = np.zeros(shape=(agent_num, self.conditional_market_num))
+            reward_array[:, index] = conditional_market.log_resolve(bucket.colour.value) / pr
+            return reward_array, index
 
     def read_current_pred(self):
         current_price_list = list(pm.current_prediction[0] for pm in self.conditional_market_list)

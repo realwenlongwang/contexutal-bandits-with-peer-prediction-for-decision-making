@@ -218,7 +218,7 @@ class StochasticGradientAgent(Agent):
             print('memory_size=', self.memory_size, ' standard deviation=', std_string)
             print('Updating weights with ' + self.algorithm + ' algorithm.')
 
-    def store_experience(self, signal_array, h_array, mean_array, std_array, reward_array, t):
+    def store_experience(self, t, signal_array, h_array, mean_array, std_array, reward_array):
 
         v_array = np.matmul(signal_array, self.w_v)
         delta = reward_array - v_array
@@ -519,7 +519,7 @@ class DeterministicGradientAgent(Agent):
             print('memory_size=', self.memory_size)
             print('Updating weights with ' + self.algorithm + ' algorithm.')
 
-    def store_experience(self, signal_array, h_array, mean_array, reward_array, t):
+    def store_experience(self, t, signal_array, h_array, mean_array, reward_array):
 
         idx = t % self.memory_size
 
