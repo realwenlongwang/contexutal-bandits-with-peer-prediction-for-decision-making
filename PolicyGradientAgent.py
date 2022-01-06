@@ -13,7 +13,8 @@ def gaussian(x, mu, sigma):
 class Agent:
 
     def __init__(self, feature_num, action_num, learning_rate_theta, name, algorithm='regular'):
-        self.theta_mean = np.zeros((feature_num * action_num, action_num))
+        # self.theta_mean = np.zeros((feature_num * action_num, action_num))
+        self.theta_mean = np.random.uniform(low=-1.0, high=1.0, size=(feature_num * action_num, action_num))
         # self.theta_mean = np.random.normal(0, np.sqrt(2/(feature_num * action_num)), (feature_num * action_num, action_num))
         # self.theta_mean = np.array([[0.0, -1.2], [0.0, -1.2], [0.0, 0.0], [-1.2, 0.0], [-1.2, 0.0], [0.0, 0.0]])
         self.init_learning_rate_theta = learning_rate_theta
@@ -23,6 +24,7 @@ class Agent:
 
         # Performance record
         self.evaluating = False
+        self.evaluation_step = 1
         self.bucket_name_list = list('bucket' + str(i) for i in range(self.action_num))
         self.report_history_list = list()
         self.mean_gradients_history_list = list([] for i in range(action_num))
@@ -38,10 +40,11 @@ class Agent:
         self.learning_rate_theta = 1 / (1 + decay_rate * epoch) * self.init_learning_rate_theta
         return self.learning_rate_theta
 
-    def evaluation_init(self, pr_red_ball_red_bucket, pr_red_ball_blue_bucket):
+    def evaluation_init(self, pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step):
         self.pr_red_ball_red_bucket = pr_red_ball_red_bucket
         self.pr_red_ball_blue_bucket = pr_red_ball_blue_bucket
         self.evaluating = True
+        self.evaluation_step = evaluation_step
 
     def signal_encode(self, bucket_no, ball, current_prediction):
         encoded_signal = np.zeros(shape=(1, self.feature_num * self.action_num))
@@ -171,7 +174,9 @@ class StochasticGradientAgent(Agent):
         self.std_weights_history_list = list([] for i in range(action_num))
         self.std_gradients_history_list = list([] for i in range(action_num))
 
-    def report(self, bucket_no, ball_colour, current_prediction):
+        self.__print_info()
+
+    def report(self, bucket_no, ball_colour, current_prediction, t):
 
         signal = self.signal_encode(bucket_no, ball_colour, current_prediction)
 
@@ -184,13 +189,13 @@ class StochasticGradientAgent(Agent):
 
         h_array = np.random.normal(loc=mean_array, scale=std_array)
 
-        if np.any(np.isnan(h_array)):
-            print('h_array: ', h_array)
-            print('mean_array:', mean_array)
-            print('std_array:', std_array)
-            raise AssertionError('Warning: report is None !!!')
+        # if np.any(np.isnan(h_array)):
+        #     print('h_array: ', h_array)
+        #     print('mean_array:', mean_array)
+        #     print('std_array:', std_array)
+        #     raise AssertionError('Warning: report is None !!!')
 
-        if self.evaluating:
+        if self.evaluating and (t % self.evaluation_step == 0):
             self.report_history_list.append([bucket_no, ball_colour.name])
             self.reward_history_list.append([bucket_no, ball_colour.name])
             for i, pr, h, mean, std in zip(range(self.action_num), current_prediction, h_array.ravel(),
@@ -207,16 +212,17 @@ class StochasticGradientAgent(Agent):
                 self.report_history_list[-1].append(std)
         return signal, h_array, mean_array, std_array
 
-    def __print_info(self, t):
-        if t == 0:
-            print(self.name)
-            print('learning_rate_theta=', self.learning_rate_theta, ' learning_rate_wv=', self.learning_rate_wv)
-            if self.learning_std:
-                std_string = 'learnable'
-            else:
-                std_string = str(self.fixed_std)
-            print('memory_size=', self.memory_size, ' standard deviation=', std_string)
-            print('Updating weights with ' + self.algorithm + ' algorithm.')
+    def __print_info(self):
+
+        print(self.name)
+        print('learning_rate_theta=', self.learning_rate_theta, ' learning_rate_wv=', self.learning_rate_wv)
+        if self.learning_std:
+            std_string = 'learnable'
+        else:
+            std_string = str(self.fixed_std)
+        print('memory_size=', self.memory_size, ' standard deviation=', std_string)
+        print('Updating weights with ' + self.algorithm + ' algorithm.')
+        print('='*30)
 
     def store_experience(self, t, signal_array, h_array, mean_array, std_array, reward_array):
 
@@ -234,7 +240,7 @@ class StochasticGradientAgent(Agent):
         (self.feature_num + 3) * self.action_num:(self.feature_num + 4) * self.action_num] = reward_array
         self.memory[idx, 0, (self.feature_num + 4) * self.action_num:(self.feature_num + 5) * self.action_num] = delta
 
-        if self.evaluating:
+        if self.evaluating and (t % self.evaluation_step == 0):
             for bucket_no, reward, v in zip(range(self.action_num), reward_array.ravel(), v_array.ravel()):
                 self.reward_history_list[-1].append(reward)
                 self.reward_history_list[-1].append(v)
@@ -248,6 +254,7 @@ class StochasticGradientAgent(Agent):
                 if self.learning_std:
                     self.std_weights_history_list[bucket_no].append(self.theta_std[:, bucket_no].copy().ravel())
 
+
     def __sample_experience(self, t):
 
         if t < self.batch_size:
@@ -257,10 +264,13 @@ class StochasticGradientAgent(Agent):
             idx = np.random.randint(low=0, high=t + 1, size=self.batch_size)  # with replacement but faster
             return self.memory[idx, :, :]
         else:
+            if self.batch_size == self.memory_size:
+                return self.memory
             # idx = np.random.choice(self.memory_size, size=self.batch_size, replace=False)
             idx = np.random.randint(self.memory_size, size=self.batch_size)  # with replacement but faster
             return self.memory[idx, :, :]
 
+    # @profile
     def batch_update(self, t):
 
         experience_batch = self.__sample_experience(t)
@@ -322,11 +332,11 @@ class StochasticGradientAgent(Agent):
         self.theta_mean += self.learning_rate_theta * gradient_mean
         if self.learning_std:
             self.theta_std += self.std_learning_rate_mask * self.learning_rate_theta * gradient_std
-        self.__print_info(t)
+
 
         self.w_v += self.learning_rate_wv * gradient_v
 
-        if self.evaluating:
+        if self.evaluating and (t % self.evaluation_step == 0):
             for bucket_no in range(self.action_num):
                 self.mean_gradients_history_list[bucket_no].append(gradient_mean[:, bucket_no].ravel())
                 if self.learning_std:
@@ -487,17 +497,19 @@ class DeterministicGradientAgent(Agent):
         self.v_gradients_history_list = list([] for i in range(action_num))
         self.v_weights_history_list = list([] for i in range(action_num))
 
-    def report(self, bucket_no, ball_colour, current_prediction):
+        self.__print_info()
+
+    def report(self, bucket_no, ball_colour, current_prediction, t):
 
         signal = self.signal_encode(bucket_no, ball_colour, current_prediction)
 
         mean_array = np.matmul(signal, self.theta_mean)
 
-        if np.any(np.isnan(mean_array)):
-            print('mean_array:', mean_array)
-            raise AssertionError('Warning: report is None !!!')
+        # if np.any(np.isnan(mean_array)):
+        #     print('mean_array:', mean_array)
+        #     raise AssertionError('Warning: report is None !!!')
 
-        if self.evaluating:
+        if self.evaluating and (t % self.evaluation_step == 0):
             self.report_history_list.append([bucket_no, ball_colour])
             self.reward_history_list.append([bucket_no, ball_colour])
             for i, pr, mean in zip(range(self.action_num), current_prediction, mean_array.ravel()):
@@ -511,13 +523,13 @@ class DeterministicGradientAgent(Agent):
                 self.report_history_list[-1].append(best_report)
         return signal, mean_array
 
-    def __print_info(self, t):
-        if t == 0:
-            print(self.name)
-            print('learning_rate_theta=', self.learning_rate_theta)
-            print('learning_rate_wv=', self.learning_rate_wv, ' learning_rate_wq=', self.learning_rate_wq)
-            print('memory_size=', self.memory_size)
-            print('Updating weights with ' + self.algorithm + ' algorithm.')
+    def __print_info(self):
+        print(self.name)
+        print('learning_rate_theta=', self.learning_rate_theta)
+        print('learning_rate_wv=', self.learning_rate_wv, ' learning_rate_wq=', self.learning_rate_wq)
+        print('memory_size=', self.memory_size)
+        print('Updating weights with ' + self.algorithm + ' algorithm.')
+        print('=' * 30)
 
     def store_experience(self, t, signal_array, h_array, mean_array, reward_array):
 
@@ -535,7 +547,7 @@ class DeterministicGradientAgent(Agent):
         # self.memory[idx, 8:11] = self.theta_mean
         # self.memory[idx, 11:] = self.w_v
 
-        if self.evaluating:
+        if self.evaluating and (t % self.evaluation_step == 0):
             for bucket_no, reward, v, q in zip(range(self.action_num), reward_array.ravel(), v_array.ravel(),
                                                q_array.ravel()):
                 self.reward_history_list[-1].append(reward)
@@ -610,7 +622,6 @@ class DeterministicGradientAgent(Agent):
         # update weights
         self.theta_mean += self.learning_rate_theta * gradient_mean
 
-        self.__print_info(t)
         self.w_q += self.learning_rate_wq * gradient_q
         self.w_v += self.learning_rate_wv * gradient_v
 
@@ -619,7 +630,7 @@ class DeterministicGradientAgent(Agent):
             print('w_v: ', self.w_v)
             raise AssertionError('Warning: weights are none !!!')
 
-        if self.evaluating:
+        if self.evaluating and (t % self.evaluation_step == 0):
             for bucket_no in range(self.action_num):
                 self.mean_gradients_history_list[bucket_no].append(gradient_mean[:, bucket_no].ravel())
                 self.v_gradients_history_list[bucket_no].append(gradient_v[:, bucket_no].ravel())

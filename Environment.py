@@ -54,12 +54,13 @@ class PredictionMarket:
             score_list.append(scores.copy()[materialised_index])
         return np.array(score_list)
 
-    # TODO: update the brier score
     def brier_resolve(self, materialised_index):
-        return []
-    #     current_scores = self.current_prediction[materialised_index] - np.sum(np.square(self.current_prediction)) / 2
-    #     previous_scores = self.previous_prediction[materialised_index] - np.sum(np.square(self.previous_prediction)) / 2
-    #     return current_scores - previous_scores
+        score_list = []
+        for i in range(len(self.prediction_history) - 1):
+            current_scores = self.prediction_history[i+1][materialised_index] - np.sum(np.square(self.prediction_history[i+1])) / 2
+            previous_scores = self.prediction_history[i][materialised_index] - np.sum(np.square(self.prediction_history[i])) / 2
+            score_list.append(current_scores - previous_scores)
+        return np.array(score_list)
 
     def resolve(self, score_func, materialised_index):
         if score_func == ScoreFunction.LOG:
