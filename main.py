@@ -32,15 +32,33 @@ def stochastic_training_notebook(agent_list, learning_rate_theta, learning_rate_
     # prior_red_list = [3 / 4, 1 / 4]
     # agent_num = 2
 
+    pp_agent_num = 3
+    sq_agent_num = agent_num - pp_agent_num
+    assert sq_agent_num >= 0
+
     if not agent_list:
-        for i in range(agent_num):
+        for i in range(sq_agent_num):
             agent = StochasticGradientAgent(feature_num=3, action_num=action_num,
                                             learning_rate_theta=learning_rate_theta, learning_rate_wv=learning_rate_wv,
                                             memory_size=memory_size, batch_size=batch_size, beta1=beta1, beta2=beta2,
                                             learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
                                             algorithm=algorithm)
+
+            agent.load_weights(np.array([[0.], [0.], [0.]]))
             agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
             agent_list.append(agent)
+
+        for i in range(pp_agent_num):
+            agent = StochasticGradientAgent(feature_num=3, action_num=action_num,
+                                            learning_rate_theta=learning_rate_theta, learning_rate_wv=learning_rate_wv,
+                                            memory_size=memory_size, batch_size=batch_size, beta1=beta1, beta2=beta2,
+                                            learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
+                                            algorithm=algorithm)
+            if i == (pp_agent_num - 1):
+                agent.load_weights(np.array([[0.], [0.], [0.]]))
+            agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
+            agent_list.append(agent)
+
 
     system_accumulated_reward = 0
 
@@ -61,14 +79,32 @@ def stochastic_training(learning_rate_theta, learning_rate_wv,
                         preferred_colour_pr_list, evaluation_step):
     agent_list = []
 
-    for i in range(agent_num):
-        agent = StochasticGradientAgent(feature_num=3, action_num=action_num,
-                                        learning_rate_theta=learning_rate_theta, learning_rate_wv=learning_rate_wv,
-                                        memory_size=memory_size, batch_size=batch_size, beta1=beta1, beta2=beta2,
-                                        learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
-                                        algorithm=algorithm)
-        agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
-        agent_list.append(agent)
+    pp_agent_num = 3
+    sq_agent_num = agent_num - pp_agent_num
+    assert sq_agent_num >= 0
+
+    if not agent_list:
+        for i in range(sq_agent_num):
+            agent = StochasticGradientAgent(feature_num=3, action_num=action_num,
+                                            learning_rate_theta=learning_rate_theta, learning_rate_wv=learning_rate_wv,
+                                            memory_size=memory_size, batch_size=batch_size, beta1=beta1, beta2=beta2,
+                                            learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
+                                            algorithm=algorithm)
+
+            agent.load_weights(np.array([[0.], [0.], [0.]]))
+            agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
+            agent_list.append(agent)
+
+        for i in range(pp_agent_num):
+            agent = StochasticGradientAgent(feature_num=3, action_num=action_num,
+                                            learning_rate_theta=learning_rate_theta, learning_rate_wv=learning_rate_wv,
+                                            memory_size=memory_size, batch_size=batch_size, beta1=beta1, beta2=beta2,
+                                            learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
+                                            algorithm=algorithm)
+            if i == (agent_num - 1):
+                agent.load_weights(np.array([[0.], [0.], [0.]]))
+            agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
+            agent_list.append(agent)
 
     system_accumulated_reward = 0
 
@@ -81,8 +117,8 @@ def stochastic_training(learning_rate_theta, learning_rate_wv,
     return agent_list, system_accumulated_reward
 
 
-def stochastic_iterative_policy(action_num, prior_red_list, pr_red_ball_red_bucket, pr_red_ball_blue_bucket, agent_list,
-                                t, decay_rate, score_func, decision_rule, preferred_colour_pr_list):
+def stochastic_iterative_policy(action_num, prior_red_list, pr_red_ball_red_bucket, pr_red_ball_blue_bucket,
+                                agent_list, t, decay_rate, score_func, decision_rule, preferred_colour_pr_list):
     if prior_red_list is None:
         prior_red_instances = np.random.uniform(size=action_num)
     else:
@@ -92,20 +128,50 @@ def stochastic_iterative_policy(action_num, prior_red_list, pr_red_ball_red_buck
     # # test normal distribution effect
     # prior_red_instances = expit(np.random.normal(loc=logit(prior_red_instances), scale=0.3))
     # pm = PredictionMarket(0, prior_red=prior_red)
-    dm = DecisionMarket(action_num, prior_red_instances, decision_rule, preferred_colour=BucketColour.RED,
-                        preferred_colour_pr_list=preferred_colour_pr_list)
+    # dm = DecisionMarket(action_num, prior_red_instances, decision_rule, preferred_colour=BucketColour.RED,
+    #                     preferred_colour_pr_list=preferred_colour_pr_list)
+    pp = PeerPrediction(0, prior_red_instances, pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
 
     experience_list = []
 
+    pp_agent_num = 3
+    sq_agent_num = len(agent_list) - pp_agent_num
 
-    for agent in agent_list:
+    for i in range(sq_agent_num):
         bucket_no, ball_colour = buckets.signal()
-        signal_array, h_array, mean_array, std_array = agent.report(bucket_no, ball_colour, dm.read_current_pred(), t)
+        signal_array, h_array, mean_array, std_array, ball_enum_report = agent_list[i].report(bucket_no, ball_colour,
+                                                                                      [pp.current_prediction[0]],
+                                                                                      t)
         pi_array = expit(h_array)
-        dm.report(pi_array)
+        pi_array = np.asscalar(pi_array)
+        # dm.report(pi_array)
+        pp.sq_report([pi_array, 1-pi_array], ball_enum_report)
         experience_list.append([t, signal_array.copy(), h_array.copy(), mean_array.copy(), std_array.copy()])
 
-    rewards_array, arm = dm.log_resolve(buckets.bucket_list)
+    for i in range(sq_agent_num, len(agent_list)):
+        bucket_no, ball_colour = buckets.signal()
+        signal_array, h_array, mean_array, std_array, ball_enum_report = agent_list[i].report(bucket_no, ball_colour,
+                                                                                      [pp.current_prediction[0]],
+                                                                                      t)
+        pi_array = expit(h_array)
+        pi_array = np.asscalar(pi_array)
+        # dm.report(pi_array)
+        pp.report([pi_array, 1-pi_array], ball_enum_report)
+        experience_list.append([t, signal_array.copy(), h_array.copy(), mean_array.copy(), std_array.copy()])
+
+    # # A always report signal agent introduced
+    # for i in range(4):
+    #     bucket_no, ball_colour = buckets.signal()
+    #     if ball_colour == Ball.RED:
+    #         pi_array = analytical_best_report_ru_rs(prior_red_instances[0], pr_red_ball_red_bucket,
+    #                                                 pr_red_ball_blue_bucket)
+    #     else:
+    #         pi_array = analytical_best_report_ru_bs(prior_red_instances[0], 1 - pr_red_ball_red_bucket,
+    #                                                 1 - pr_red_ball_blue_bucket)
+    #     pp.report(pi_array, ball_colour)
+    # rewards_array, arm = dm.log_resolve(buckets.bucket_list)
+    rewards_array = pp.log_resolve()
+    # rewards_array = rewards_array[:len(pp_agent_list)]
 
     # learning
     for agent, reward_array, experience in zip(agent_list, rewards_array, experience_list):
@@ -120,7 +186,8 @@ def stochastic_iterative_policy(action_num, prior_red_list, pr_red_ball_red_buck
 
         agent.learning_rate_decay(epoch=t, decay_rate=decay_rate)
 
-    return buckets.bucket_list[arm].colour == BucketColour.RED
+    # return buckets.bucket_list[arm].colour == BucketColour.RED
+    return False
 
 
 def deterministic_training_notebook(
@@ -130,7 +197,6 @@ def deterministic_training_notebook(
         decay_rate, beta1, beta2, algorithm, pr_red_ball_red_bucket,
         pr_red_ball_blue_bucket, prior_red_list, agent_num, explorer_learning,
         fixed_std, decision_rule, preferred_colour_pr_list, evaluation_step):
-
     if not agent_list:
         for i in range(agent_num):
             agent = DeterministicGradientAgent(
@@ -252,7 +318,7 @@ def deterministic_iterative_policy(action_num, prior_red_list, pr_red_ball_red_b
 
 if __name__ == '__main__':
     learning_rate_theta = 1e-4
-    learning_rate_wv = 1e-4
+    learning_rate_wv =  1e-4
     memory_size = 16
     batch_size = 16
     training_episodes = int(1e6)
@@ -266,12 +332,12 @@ if __name__ == '__main__':
     # Bucket parameters
     pr_red_ball_red_bucket = 2 / 3
     pr_red_ball_blue_bucket = 1 / 3
-    prior_red_list = [3 / 4, 1 / 4]
-    agent_num = 2
-    action_num = 2
+    prior_red_list = [0.7, 0.3]
+    agent_num = 4
+    action_num = 1
     preferred_colour_pr_list = [0.8, 0.2]
     score_func = ScoreFunction.LOG
-    decision_rule = DecisionRule.STOCHASTIC
+    decision_rule = DecisionRule.DETERMINISTIC
     evaluation_step = 1
 
     stochastic_training(learning_rate_theta, learning_rate_wv,
@@ -305,7 +371,7 @@ if __name__ == '__main__':
     # decision_rule = DecisionRule.STOCHASTIC
     # preferred_colour_pr_list = [0.8, 0.2]
     #
-    # agent_list = deterministic_training(feature_num, action_num, learning_rate_theta, learning_rate_wv, learning_rate_wq,
+    # pp_agent_list = deterministic_training(feature_num, action_num, learning_rate_theta, learning_rate_wv, learning_rate_wq,
     #                                              memory_size, batch_size, training_episodes,
     #                                              decay_rate, beta1, beta2, algorithm, pr_red_ball_red_bucket,
     #                                              pr_red_ball_blue_bucket, prior_red_list, agent_num,

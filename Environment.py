@@ -33,6 +33,50 @@ class DecisionRule(Enum):
     DETERMINISTIC = 1
 
 
+class PeerPrediction:
+    def __init__(self, no, prior_red, pr_red_ball_red_bucket, pr_red_ball_blue_bucket):
+        self.no = no
+        self.current_prediction = [prior_red, 1-prior_red]
+        self.pr_red_ball_red_bucket = pr_red_ball_red_bucket
+        self.pr_red_ball_blue_bucket = pr_red_ball_blue_bucket
+        self.prediction_history = []
+        self.reported_signal_history = []
+        self.sq_prediction_history = []
+        self.sq_reported_signal_history = []
+
+    def sq_report(self, prediction_list, reported_signal):
+        peer_prediction_red = self.pr_red_ball_red_bucket * prediction_list[0] + self.pr_red_ball_blue_bucket * prediction_list[1]
+        peer_prediction = np.array([peer_prediction_red, 1 - peer_prediction_red])
+        self.sq_prediction_history.append(peer_prediction)
+        self.sq_reported_signal_history.append(reported_signal)
+        self.current_prediction = prediction_list.copy()
+
+    def report(self, prediction_list, reported_signal):
+        peer_prediction_red = self.pr_red_ball_red_bucket * prediction_list[0] + self.pr_red_ball_blue_bucket * prediction_list[1]
+        peer_prediction = np.array([peer_prediction_red, 1-peer_prediction_red])
+        self.prediction_history.append(peer_prediction)
+        self.reported_signal_history.append(reported_signal)
+
+
+    def log_resolve(self):
+        score_list = []
+        sq_agent_num = len(self.sq_prediction_history)
+        pp_agent_num = len(self.prediction_history)
+        for i in range(sq_agent_num):
+            score_tuple = np.log(self.sq_prediction_history[i])
+            score = score_tuple[self.reported_signal_history[0].value]
+            score_list.append(score)
+        for i in range(pp_agent_num):
+            score_tuple = np.log(self.prediction_history[i])
+            peer_signal_list = self.reported_signal_history.copy()
+            peer_signal_list.pop(i)
+            reported_signal = np.random.choice(peer_signal_list)
+            score = score_tuple[reported_signal.value]
+            score_list.append(score)
+        return np.array(score_list)
+
+
+
 class PredictionMarket:
 
     def __init__(self, no, prior_red):
@@ -42,7 +86,7 @@ class PredictionMarket:
 
 
     def report(self, prediction):
-        assert sum(prediction) == 1, print('Probabilities not sum to one!', prediction)
+        # assert sum(prediction) == 1, print('Probabilities not sum to one!', prediction)
         # Record the contract if multiple traders.
         self.prediction_history.append(prediction.copy())
         self.current_prediction = prediction.copy()

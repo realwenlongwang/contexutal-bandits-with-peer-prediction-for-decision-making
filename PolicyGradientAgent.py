@@ -13,10 +13,10 @@ def gaussian(x, mu, sigma):
 class Agent:
 
     def __init__(self, feature_num, action_num, learning_rate_theta, name, algorithm='regular'):
-        # self.theta_mean = np.zeros((feature_num * action_num, action_num))
-        self.theta_mean = np.random.uniform(low=-1.0, high=1.0, size=(feature_num * action_num, action_num))
+        self.theta_mean = np.zeros((feature_num * action_num, action_num))
+        # self.theta_mean = np.random.uniform(low=-1.0, high=1.0, size=(feature_num * action_num, action_num))
         # self.theta_mean = np.random.normal(0, np.sqrt(2/(feature_num * action_num)), (feature_num * action_num, action_num))
-        # self.theta_mean = np.array([[0.0, -1.2], [0.0, -1.2], [0.0, 0.0], [-1.2, 0.0], [-1.2, 0.0], [0.0, 0.0]])
+        self.theta_mean = np.array([[ 0.70840262],[-0.66252819],[ 1.0021465 ]])
         self.init_learning_rate_theta = learning_rate_theta
         self.learning_rate_theta = self.init_learning_rate_theta
         self.feature_num = feature_num
@@ -35,6 +35,10 @@ class Agent:
 
     def save_weights(self, file_name):
         np.save(file_name, self.theta_mean)
+
+    def load_weights(self, theta_mean):
+        assert self.theta_mean.shape == theta_mean.shape
+        self.theta_mean = theta_mean.copy()
 
     def learning_rate_decay(self, epoch, decay_rate):
         self.learning_rate_theta = 1 / (1 + decay_rate * epoch) * self.init_learning_rate_theta
@@ -180,6 +184,12 @@ class StochasticGradientAgent(Agent):
 
         signal = self.signal_encode(bucket_no, ball_colour, current_prediction)
 
+        ball_signal = self.signal_encode(bucket_no, ball_colour, np.ones(np.shape(current_prediction)) * 0.5)
+
+        ball_report_mu = np.matmul(ball_signal, self.theta_mean)
+
+
+
         mean_array = np.matmul(signal, self.theta_mean)
         if self.learning_std:
             std_array = np.exp(np.matmul(signal, self.theta_std))
@@ -188,7 +198,10 @@ class StochasticGradientAgent(Agent):
             std_array = np.ones((1, self.action_num)) * self.fixed_std
 
         h_array = np.random.normal(loc=mean_array, scale=std_array)
+        # ball_report = np.random.normal(loc=ball_report_mu, scale=std_array)
+        ball_report = ball_report_mu
 
+        ball_enum_report = Ball.RED if ball_report >= 0 else Ball.BLUE
         # if np.any(np.isnan(h_array)):
         #     print('h_array: ', h_array)
         #     print('mean_array:', mean_array)
@@ -210,7 +223,7 @@ class StochasticGradientAgent(Agent):
                     best_report = current_prediction[i]
                 self.report_history_list[-1].append(best_report)
                 self.report_history_list[-1].append(std)
-        return signal, h_array, mean_array, std_array
+        return signal, h_array, mean_array, std_array, ball_enum_report
 
     def __print_info(self):
 
@@ -330,6 +343,7 @@ class StochasticGradientAgent(Agent):
         # update weights
 
         self.theta_mean += self.learning_rate_theta * gradient_mean
+
         if self.learning_std:
             self.theta_std += self.std_learning_rate_mask * self.learning_rate_theta * gradient_std
 
@@ -361,16 +375,14 @@ class StochasticGradientAgent(Agent):
             axs[0].plot(reward_history_df[v_column_name], label=v_column_name)
             axs[0].plot(reward_history_df[reward_column_name].expanding().mean(), zorder=-99,
                         label='Average ' + reward_column_name)
-            last_quarter_num = len(reward_history_df) // 4
-            axs[1].hlines(y=0.0, xmin=last_quarter_num, xmax=reward_history_df.shape[0], colors='black',
-                          linestyles='dashdot')
-            axs[1].plot(reward_history_df.tail(last_quarter_num)[v_column_name], label=v_column_name)
-            axs[1].plot(reward_history_df.tail(last_quarter_num)[reward_column_name].expanding().mean(), zorder=-99,
-                        label='Last Quarter Average ' + reward_column_name)
-            axs[1].annotate('%.3f' % reward_history_df.tail().mean(),
-                            xy=(len(reward_history_df), reward_history_df.tail().mean()),
-                            # xytext=(len(reward_history_df) / 2, np.log(2) / 2),
-                            arrowprops=dict(arrowstyle="->"))
+
+            last_quarter_num = 3 * len(reward_history_df) // 4
+            ymax = reward_history_df.loc[last_quarter_num:, reward_column_name].max()
+            axs[1].plot(reward_history_df[v_column_name], label=v_column_name)
+            axs[1].plot(reward_history_df[reward_column_name].expanding().mean(), zorder=-99,
+                        label='Average ' + reward_column_name)
+            axs[1].set_xlim(left=last_quarter_num)
+            axs[1].set_ylim(top=ymax)
             fig.legend(loc='upper right')
             fig.suptitle(self.name + ' Reward History')
 
