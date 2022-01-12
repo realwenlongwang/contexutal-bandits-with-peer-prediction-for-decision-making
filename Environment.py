@@ -43,6 +43,8 @@ class PeerPrediction:
         self.reported_signal_history = []
         self.sq_prediction_history = []
         self.sq_reported_signal_history = []
+        # peer_prediction = self.pr_red_ball_red_bucket * prior_red + self.pr_red_ball_blue_bucket * (1 - prior_red)
+        # self.sq_reported_signal_history.append([peer_prediction, 1 - peer_prediction])
 
     def sq_report(self, prediction_list, reported_signal):
         peer_prediction_red = self.pr_red_ball_red_bucket * prediction_list[0] + self.pr_red_ball_blue_bucket * prediction_list[1]
@@ -64,7 +66,10 @@ class PeerPrediction:
         pp_agent_num = len(self.prediction_history)
         for i in range(sq_agent_num):
             score_tuple = np.log(self.sq_prediction_history[i])
-            score = score_tuple[self.reported_signal_history[0].value]
+            if i == sq_agent_num - 1:
+                score = score_tuple[self.reported_signal_history[0].value]
+            else:
+                score = score_tuple[self.sq_reported_signal_history[i+1].value]
             score_list.append(score)
         for i in range(pp_agent_num):
             score_tuple = np.log(self.prediction_history[i])
@@ -74,6 +79,30 @@ class PeerPrediction:
             score = score_tuple[reported_signal.value]
             score_list.append(score)
         return np.array(score_list)
+
+
+class PeerDecision:
+    def __init__(self, action_num, prior_red_instances, pr_red_ball_red_bucket, pr_red_ball_blue_bucket):
+        self.action_num = action_num
+        self.peer_decision_list = list(PeerPrediction(no, prior_red, pr_red_ball_red_bucket, pr_red_ball_blue_bucket) for no, prior_red in zip(range(self.action_num), prior_red_instances))
+
+    def report(self, pi_array, signal_array):
+        for pp, pi, signal in zip(self.peer_decision_list,  pi_array, signal_array):
+            scalar_pi = np.asscalar(pi)
+            pp.report([scalar_pi, 1-scalar_pi], signal)
+
+    def read_current_pred(self):
+        current_price_list = list(pp.current_prediction[0] for pp in self.peer_decision_list)
+
+        return current_price_list
+
+    # def log_resolve(self, buckets):
+    #     current_price_list = self.read_current_pred()
+    #     index = np.argmax(current_price_list)
+    #     peer_prediction, bucket = self.peer_decision_list[index], buckets[index]
+    #     agent_num = len(peer_prediction.prediction_history)
+    #     reward_array = np.zeros(shape=(agent_num, self.action_num))
+    #     reward_array[:, index] =
 
 
 
