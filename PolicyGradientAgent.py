@@ -16,7 +16,6 @@ class Agent:
         self.theta_mean = np.zeros((feature_num * action_num, action_num))
         # self.theta_mean = np.random.uniform(low=-1.0, high=1.0, size=(feature_num * action_num, action_num))
         # self.theta_mean = np.random.normal(0, np.sqrt(2/(feature_num * action_num)), (feature_num * action_num, action_num))
-        self.theta_mean = np.array([[ 0.70840262],[-0.66252819],[ 1.0021465 ]])
         self.init_learning_rate_theta = learning_rate_theta
         self.learning_rate_theta = self.init_learning_rate_theta
         self.feature_num = feature_num
@@ -39,6 +38,13 @@ class Agent:
     def load_weights(self, theta_mean):
         assert self.theta_mean.shape == theta_mean.shape
         self.theta_mean = theta_mean.copy()
+
+    def load_perfect_weights(self, pr_red_ball_red_bucket, pr_red_ball_blue_bucket):
+        for i in range(self.action_num):
+            self.theta_mean[i*self.feature_num, i] = np.log(pr_red_ball_red_bucket/ pr_red_ball_blue_bucket)
+            self.theta_mean[i*self.feature_num + 1, i] = np.log(pr_red_ball_blue_bucket/ pr_red_ball_red_bucket)
+            self.theta_mean[i*self.feature_num + 2, i] = 1
+
 
     def learning_rate_decay(self, epoch, decay_rate):
         self.learning_rate_theta = 1 / (1 + decay_rate * epoch) * self.init_learning_rate_theta
@@ -186,11 +192,12 @@ class StochasticGradientAgent(Agent):
 
         ball_signal = self.signal_encode(bucket_no, ball_colour, np.ones(np.shape(current_prediction)) * 0.5)
 
-        ball_report_mu = np.matmul(ball_signal, self.theta_mean)
+        reported_signal_array = np.matmul(ball_signal, self.theta_mean)
 
 
 
         mean_array = np.matmul(signal, self.theta_mean)
+
         if self.learning_std:
             std_array = np.exp(np.matmul(signal, self.theta_std))
             self.std_learning_rate_mask = std_array > self.fixed_std
@@ -198,10 +205,7 @@ class StochasticGradientAgent(Agent):
             std_array = np.ones((1, self.action_num)) * self.fixed_std
 
         h_array = np.random.normal(loc=mean_array, scale=std_array)
-        # ball_report = np.random.normal(loc=ball_report_mu, scale=std_array)
-        ball_report = ball_report_mu
 
-        ball_enum_report = Ball.RED if ball_report >= 0 else Ball.BLUE
         # if np.any(np.isnan(h_array)):
         #     print('h_array: ', h_array)
         #     print('mean_array:', mean_array)
@@ -223,7 +227,7 @@ class StochasticGradientAgent(Agent):
                     best_report = current_prediction[i]
                 self.report_history_list[-1].append(best_report)
                 self.report_history_list[-1].append(std)
-        return signal, h_array, mean_array, std_array, ball_enum_report
+        return signal, h_array, mean_array, std_array, reported_signal_array
 
     def __print_info(self):
 
@@ -679,7 +683,7 @@ class DeterministicGradientAgent(Agent):
             fig.suptitle(self.name + ' Reward History')
 
     def mean_history_plot(self):
-        report_history_df = pd.DataFrame(self.report_history_list, columns=['mean_array', 'signal_array'])
+        report_history_df = pd.DataFrame(self.report_history_list, columns=['mean_array', 'mean_array'])
         fig, ax = plt.subplots(figsize=(15, 4))
         for signal, df in report_history_df.reset_index().groupby('signal_array'):
             ax.scatter(x=df['index'], y=expit(df['mean_array']), label=signal, marker='.', c=signal, alpha=0.6, s=0.1)

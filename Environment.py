@@ -82,28 +82,32 @@ class PeerPrediction:
 
 
 class PeerDecision:
-    def __init__(self, action_num, prior_red_instances, pr_red_ball_red_bucket, pr_red_ball_blue_bucket):
+    def __init__(self, action_num, agent_num, prior_red_instances, pr_red_ball_red_bucket, pr_red_ball_blue_bucket):
         self.action_num = action_num
+        self.agent_num = agent_num
         self.peer_decision_list = list(PeerPrediction(no, prior_red, pr_red_ball_red_bucket, pr_red_ball_blue_bucket) for no, prior_red in zip(range(self.action_num), prior_red_instances))
 
-    def report(self, pi_array, signal_array):
-        for pp, pi, signal in zip(self.peer_decision_list,  pi_array, signal_array):
-            scalar_pi = np.asscalar(pi)
-            pp.report([scalar_pi, 1-scalar_pi], signal)
+    def sq_report(self, pi_array, reported_signal_array):
+        for pp, pi, mean in zip(self.peer_decision_list, pi_array[0], reported_signal_array[0]):
+            signal = Ball.RED if mean >= 0 else Ball.BLUE
+            pp.sq_report([pi, 1 - pi], signal)
+
+    def report(self, pi_array, reported_signal_array):
+        for pp, pi, mean in zip(self.peer_decision_list, pi_array[0], reported_signal_array[0]):
+            signal = Ball.RED if mean >= 0 else Ball.BLUE
+            pp.report([pi, 1-pi], signal)
 
     def read_current_pred(self):
         current_price_list = list(pp.current_prediction[0] for pp in self.peer_decision_list)
 
         return current_price_list
 
-    # def log_resolve(self, buckets):
-    #     current_price_list = self.read_current_pred()
-    #     index = np.argmax(current_price_list)
-    #     peer_prediction, bucket = self.peer_decision_list[index], buckets[index]
-    #     agent_num = len(peer_prediction.prediction_history)
-    #     reward_array = np.zeros(shape=(agent_num, self.action_num))
-    #     reward_array[:, index] =
-
+    def log_resolve(self):
+        reward_array = np.zeros(shape=(self.agent_num, self.action_num))
+        for i, peer_prediction in zip(range(self.action_num), self.peer_decision_list):
+            temp_reward = peer_prediction.log_resolve()
+            reward_array[:, i] = temp_reward
+        return reward_array
 
 
 class PredictionMarket:

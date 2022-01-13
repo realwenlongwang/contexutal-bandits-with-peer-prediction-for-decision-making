@@ -44,7 +44,6 @@ def stochastic_training_notebook(agent_list, learning_rate_theta, learning_rate_
                                             learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
                                             algorithm=algorithm)
 
-            agent.load_weights(np.array([[0.], [0.], [0.]]))
             agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
             agent_list.append(agent)
 
@@ -54,8 +53,8 @@ def stochastic_training_notebook(agent_list, learning_rate_theta, learning_rate_
                                             memory_size=memory_size, batch_size=batch_size, beta1=beta1, beta2=beta2,
                                             learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
                                             algorithm=algorithm)
-            if i == (pp_agent_num - 1):
-                agent.load_weights(np.array([[0.], [0.], [0.]]))
+            if i == 0 or i == 1:
+                agent.load_perfect_weights(pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
             agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
             agent_list.append(agent)
 
@@ -91,7 +90,6 @@ def stochastic_training(learning_rate_theta, learning_rate_wv,
                                             learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
                                             algorithm=algorithm)
 
-            agent.load_weights(np.array([[0.], [0.], [0.]]))
             agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
             agent_list.append(agent)
 
@@ -101,8 +99,8 @@ def stochastic_training(learning_rate_theta, learning_rate_wv,
                                             memory_size=memory_size, batch_size=batch_size, beta1=beta1, beta2=beta2,
                                             learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
                                             algorithm=algorithm)
-            if i == (agent_num - 1):
-                agent.load_weights(np.array([[0.], [0.], [0.]]))
+            if i == 0 or i == 1:
+                agent.load_perfect_weights(pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
             agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
             agent_list.append(agent)
 
@@ -130,7 +128,8 @@ def stochastic_iterative_policy(action_num, prior_red_list, pr_red_ball_red_buck
     # pm = PredictionMarket(0, prior_red=prior_red)
     # dm = DecisionMarket(action_num, prior_red_instances, decision_rule, preferred_colour=BucketColour.RED,
     #                     preferred_colour_pr_list=preferred_colour_pr_list)
-    pp = PeerPrediction(0, np.asscalar(prior_red_instances), pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
+    # pp = PeerPrediction(0, np.asscalar(prior_red_instances), pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
+    pd = PeerDecision(action_num, len(agent_list), prior_red_instances, pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
 
     experience_list = []
 
@@ -139,39 +138,30 @@ def stochastic_iterative_policy(action_num, prior_red_list, pr_red_ball_red_buck
 
     for i in range(sq_agent_num):
         bucket_no, ball_colour = buckets.signal()
-        signal_array, h_array, mean_array, std_array, ball_enum_report = agent_list[i].report(bucket_no, ball_colour,
-                                                                                      [pp.current_prediction[0]],
-                                                                                      t)
+        signal_array, h_array, mean_array, std_array, reported_signal_array = agent_list[i].report(bucket_no, ball_colour,
+                                                                            pd.read_current_pred(), t)
         pi_array = expit(h_array)
-        pi_array = np.asscalar(pi_array)
+        # pi_array = np.asscalar(pi_array)
         # dm.report(pi_array)
-        pp.sq_report([pi_array, 1-pi_array], ball_enum_report)
+        # pp.sq_report([pi_array, 1-pi_array], ball_enum_report)
+        pd.sq_report(pi_array, reported_signal_array)
         experience_list.append([t, signal_array.copy(), h_array.copy(), mean_array.copy(), std_array.copy()])
 
     for i in range(sq_agent_num, len(agent_list)):
         bucket_no, ball_colour = buckets.signal()
-        signal_array, h_array, mean_array, std_array, ball_enum_report = agent_list[i].report(bucket_no, ball_colour,
-                                                                                      [pp.current_prediction[0]],
+        signal_array, h_array, mean_array, std_array, reported_signal_array = agent_list[i].report(bucket_no, ball_colour,
+                                                                                      pd.read_current_pred(),
                                                                                       t)
         pi_array = expit(h_array)
-        pi_array = np.asscalar(pi_array)
+        # pi_array = np.asscalar(pi_array)
         # dm.report(pi_array)
-        pp.report([pi_array, 1-pi_array], ball_enum_report)
+        # pp.report([pi_array, 1-pi_array], ball_enum_report)
+        pd.report(pi_array, reported_signal_array)
         experience_list.append([t, signal_array.copy(), h_array.copy(), mean_array.copy(), std_array.copy()])
 
-    # # A always report signal agent introduced
-    # for i in range(4):
-    #     bucket_no, ball_colour = buckets.signal()
-    #     if ball_colour == Ball.RED:
-    #         pi_array = analytical_best_report_ru_rs(prior_red_instances[0], pr_red_ball_red_bucket,
-    #                                                 pr_red_ball_blue_bucket)
-    #     else:
-    #         pi_array = analytical_best_report_ru_bs(prior_red_instances[0], 1 - pr_red_ball_red_bucket,
-    #                                                 1 - pr_red_ball_blue_bucket)
-    #     pp.report(pi_array, ball_colour)
     # rewards_array, arm = dm.log_resolve(buckets.bucket_list)
-    rewards_array = pp.log_resolve()
-    # rewards_array = rewards_array[:len(pp_agent_list)]
+    # rewards_array = pp.log_resolve()
+    rewards_array = pd.log_resolve()
 
     # learning
     for agent, reward_array, experience in zip(agent_list, rewards_array, experience_list):
@@ -301,7 +291,7 @@ def deterministic_iterative_policy(action_num, prior_red_list, pr_red_ball_red_b
 
         experience.append(reward_array)
         agent.store_experience(*experience)
-        # explorer.update(reward_array, signal_array)
+        # explorer.update(reward_array, mean_array)
 
         try:
             agent.batch_update(t)
