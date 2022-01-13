@@ -130,7 +130,7 @@ def stochastic_iterative_policy(action_num, prior_red_list, pr_red_ball_red_buck
     # pm = PredictionMarket(0, prior_red=prior_red)
     # dm = DecisionMarket(action_num, prior_red_instances, decision_rule, preferred_colour=BucketColour.RED,
     #                     preferred_colour_pr_list=preferred_colour_pr_list)
-    pp = PeerPrediction(0, prior_red_instances, pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
+    pp = PeerPrediction(0, np.asscalar(prior_red_instances), pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
 
     experience_list = []
 
@@ -333,7 +333,7 @@ if __name__ == '__main__':
     pr_red_ball_red_bucket = 2 / 3
     pr_red_ball_blue_bucket = 1 / 3
     prior_red_list = [0.7, 0.3]
-    agent_num = 4
+    agent_num = 5
     action_num = 1
     preferred_colour_pr_list = [0.8, 0.2]
     score_func = ScoreFunction.LOG

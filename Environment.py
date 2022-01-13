@@ -43,8 +43,8 @@ class PeerPrediction:
         self.reported_signal_history = []
         self.sq_prediction_history = []
         self.sq_reported_signal_history = []
-        # peer_prediction = self.pr_red_ball_red_bucket * prior_red + self.pr_red_ball_blue_bucket * (1 - prior_red)
-        # self.sq_reported_signal_history.append([peer_prediction, 1 - peer_prediction])
+        peer_prediction = self.pr_red_ball_red_bucket * prior_red + self.pr_red_ball_blue_bucket * (1 - prior_red)
+        self.sq_prediction_history.append(np.array([peer_prediction, 1 - peer_prediction]))
 
     def sq_report(self, prediction_list, reported_signal):
         peer_prediction_red = self.pr_red_ball_red_bucket * prediction_list[0] + self.pr_red_ball_blue_bucket * prediction_list[1]
@@ -62,17 +62,17 @@ class PeerPrediction:
 
     def log_resolve(self):
         score_list = []
-        sq_agent_num = len(self.sq_prediction_history)
+        sq_agent_num = len(self.sq_reported_signal_history)
         pp_agent_num = len(self.prediction_history)
         for i in range(sq_agent_num):
-            score_tuple = np.log(self.sq_prediction_history[i])
+            score_tuple = np.log(self.sq_prediction_history[i+1]) - np.log(self.sq_prediction_history[i])
             if i == sq_agent_num - 1:
                 score = score_tuple[self.reported_signal_history[0].value]
             else:
                 score = score_tuple[self.sq_reported_signal_history[i+1].value]
             score_list.append(score)
         for i in range(pp_agent_num):
-            score_tuple = np.log(self.prediction_history[i])
+            score_tuple = np.log(self.prediction_history[i]) - np.log(self.sq_prediction_history[-1])
             peer_signal_list = self.reported_signal_history.copy()
             peer_signal_list.pop(i)
             reported_signal = np.random.choice(peer_signal_list)
