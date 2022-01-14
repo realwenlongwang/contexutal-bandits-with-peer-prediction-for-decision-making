@@ -33,30 +33,33 @@ def stochastic_training_notebook(agent_list, learning_rate_theta, learning_rate_
     # agent_num = 2
 
     pp_agent_num = 3
-    sq_agent_num = agent_num - pp_agent_num
-    assert sq_agent_num >= 0
+    sq_agent_num = agent_num
+
 
     if not agent_list:
-        for i in range(sq_agent_num):
-            agent = StochasticGradientAgent(feature_num=3, action_num=action_num,
-                                            learning_rate_theta=learning_rate_theta, learning_rate_wv=learning_rate_wv,
-                                            memory_size=memory_size, batch_size=batch_size, beta1=beta1, beta2=beta2,
-                                            learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
-                                            algorithm=algorithm)
+        for j in range(action_num):
+            action_agent_list = []
+            for i in range(sq_agent_num):
+                agent = StochasticGradientAgent(feature_num=3, action_num=1,
+                                                learning_rate_theta=learning_rate_theta, learning_rate_wv=learning_rate_wv,
+                                                memory_size=memory_size, batch_size=batch_size, beta1=beta1, beta2=beta2,
+                                                learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
+                                                algorithm=algorithm)
 
-            agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
-            agent_list.append(agent)
+                agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
+                action_agent_list.append(agent)
 
-        for i in range(pp_agent_num):
-            agent = StochasticGradientAgent(feature_num=3, action_num=action_num,
-                                            learning_rate_theta=learning_rate_theta, learning_rate_wv=learning_rate_wv,
-                                            memory_size=memory_size, batch_size=batch_size, beta1=beta1, beta2=beta2,
-                                            learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
-                                            algorithm=algorithm)
-            if i == 0 or i == 1:
-                agent.load_perfect_weights(pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
-            agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
-            agent_list.append(agent)
+            for i in range(pp_agent_num):
+                agent = StochasticGradientAgent(feature_num=3, action_num=1,
+                                                learning_rate_theta=learning_rate_theta, learning_rate_wv=learning_rate_wv,
+                                                memory_size=memory_size, batch_size=batch_size, beta1=beta1, beta2=beta2,
+                                                learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
+                                                algorithm=algorithm)
+                if i == 0 or i == 1:
+                    agent.load_perfect_weights(pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
+                agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
+                action_agent_list.append(agent)
+            agent_list.append(action_agent_list)
 
 
     system_accumulated_reward = 0
@@ -79,30 +82,36 @@ def stochastic_training(learning_rate_theta, learning_rate_wv,
     agent_list = []
 
     pp_agent_num = 3
-    sq_agent_num = agent_num - pp_agent_num
-    assert sq_agent_num >= 0
+    sq_agent_num = agent_num
 
     if not agent_list:
-        for i in range(sq_agent_num):
-            agent = StochasticGradientAgent(feature_num=3, action_num=action_num,
-                                            learning_rate_theta=learning_rate_theta, learning_rate_wv=learning_rate_wv,
-                                            memory_size=memory_size, batch_size=batch_size, beta1=beta1, beta2=beta2,
-                                            learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
-                                            algorithm=algorithm)
+        for j in range(action_num):
+            action_agent_list = []
+            for i in range(sq_agent_num):
+                agent = StochasticGradientAgent(feature_num=3, action_num=1,
+                                                learning_rate_theta=learning_rate_theta,
+                                                learning_rate_wv=learning_rate_wv,
+                                                memory_size=memory_size, batch_size=batch_size, beta1=beta1,
+                                                beta2=beta2,
+                                                learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
+                                                algorithm=algorithm)
 
-            agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
-            agent_list.append(agent)
+                agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
+                action_agent_list.append(agent)
 
-        for i in range(pp_agent_num):
-            agent = StochasticGradientAgent(feature_num=3, action_num=action_num,
-                                            learning_rate_theta=learning_rate_theta, learning_rate_wv=learning_rate_wv,
-                                            memory_size=memory_size, batch_size=batch_size, beta1=beta1, beta2=beta2,
-                                            learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
-                                            algorithm=algorithm)
-            if i == 0 or i == 1:
-                agent.load_perfect_weights(pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
-            agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
-            agent_list.append(agent)
+            for i in range(pp_agent_num):
+                agent = StochasticGradientAgent(feature_num=3, action_num=1,
+                                                learning_rate_theta=learning_rate_theta,
+                                                learning_rate_wv=learning_rate_wv,
+                                                memory_size=memory_size, batch_size=batch_size, beta1=beta1,
+                                                beta2=beta2,
+                                                learning_std=learning_std, fixed_std=fixed_std, name='agent' + str(i),
+                                                algorithm=algorithm)
+                if i == 0 or i == 1:
+                    agent.load_perfect_weights(pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
+                agent.evaluation_init(pr_red_ball_red_bucket, pr_red_ball_blue_bucket, evaluation_step)
+                action_agent_list.append(agent)
+            agent_list.append(action_agent_list)
 
     system_accumulated_reward = 0
 
@@ -131,50 +140,55 @@ def stochastic_iterative_policy(action_num, prior_red_list, pr_red_ball_red_buck
     # pp = PeerPrediction(0, np.asscalar(prior_red_instances), pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
     pd = PeerDecision(action_num, len(agent_list), prior_red_instances, pr_red_ball_red_bucket, pr_red_ball_blue_bucket)
 
-    experience_list = []
 
     pp_agent_num = 3
-    sq_agent_num = len(agent_list) - pp_agent_num
+    sq_agent_num = len(agent_list[0]) - pp_agent_num
 
-    for i in range(sq_agent_num):
-        bucket_no, ball_colour = buckets.signal()
-        signal_array, h_array, mean_array, std_array, reported_signal_array = agent_list[i].report(bucket_no, ball_colour,
-                                                                            pd.read_current_pred(), t)
-        pi_array = expit(h_array)
-        # pi_array = np.asscalar(pi_array)
-        # dm.report(pi_array)
-        # pp.sq_report([pi_array, 1-pi_array], ball_enum_report)
-        pd.sq_report(pi_array, reported_signal_array)
-        experience_list.append([t, signal_array.copy(), h_array.copy(), mean_array.copy(), std_array.copy()])
+    for j in range(action_num):
 
-    for i in range(sq_agent_num, len(agent_list)):
-        bucket_no, ball_colour = buckets.signal()
-        signal_array, h_array, mean_array, std_array, reported_signal_array = agent_list[i].report(bucket_no, ball_colour,
-                                                                                      pd.read_current_pred(),
-                                                                                      t)
-        pi_array = expit(h_array)
-        # pi_array = np.asscalar(pi_array)
-        # dm.report(pi_array)
-        # pp.report([pi_array, 1-pi_array], ball_enum_report)
-        pd.report(pi_array, reported_signal_array)
-        experience_list.append([t, signal_array.copy(), h_array.copy(), mean_array.copy(), std_array.copy()])
+        experience_list = []
 
-    # rewards_array, arm = dm.log_resolve(buckets.bucket_list)
-    # rewards_array = pp.log_resolve()
-    rewards_array = pd.log_resolve()
+        for i in range(sq_agent_num):
+            bucket_no = j
+            ball_colour = buckets.bucket_list[bucket_no].signal()
+            signal_array, h_array, mean_array, std_array, reported_signal_array = agent_list[j][i].report(0, ball_colour,
+                                                                                pd.read_current_pred(bucket_no), t)
+            pi_array = expit(h_array)
+            # pi_array = np.asscalar(pi_array)
+            # dm.report(pi_array)
+            # pp.sq_report([pi_array, 1-pi_array], ball_enum_report)
+            pd.sq_report(pi_array, reported_signal_array, bucket_no)
+            experience_list.append([t, signal_array.copy(), h_array.copy(), mean_array.copy(), std_array.copy()])
 
-    # learning
-    for agent, reward_array, experience in zip(agent_list, rewards_array, experience_list):
+        for i in range(sq_agent_num, len(agent_list[j])):
+            bucket_no = j
+            ball_colour = buckets.bucket_list[bucket_no].signal()
+            signal_array, h_array, mean_array, std_array, reported_signal_array = agent_list[j][i].report(0, ball_colour,
+                                                                                          pd.read_current_pred(bucket_no),
+                                                                                          t)
+            pi_array = expit(h_array)
+            # pi_array = np.asscalar(pi_array)
+            # dm.report(pi_array)
+            # pp.report([pi_array, 1-pi_array], ball_enum_report)
+            pd.report(pi_array, reported_signal_array, bucket_no)
+            experience_list.append([t, signal_array.copy(), h_array.copy(), mean_array.copy(), std_array.copy()])
 
-        experience.append(reward_array)
-        agent.store_experience(*experience)
-        try:
-            agent.batch_update(t)
-        except AssertionError:
-            tb = traceback.format_exc()
-            print(tb)
+        # rewards_array, arm = dm.log_resolve(buckets.bucket_list)
+        # rewards_array = pp.log_resolve()
+        rewards_array = pd.peer_decision_list[j].log_resolve()
 
-        agent.learning_rate_decay(epoch=t, decay_rate=decay_rate)
+        # learning
+        for agent, reward_array, experience in zip(agent_list[j], rewards_array, experience_list):
+
+            experience.append(reward_array)
+            agent.store_experience(*experience)
+            try:
+                agent.batch_update(t)
+            except AssertionError:
+                tb = traceback.format_exc()
+                print(tb)
+
+            agent.learning_rate_decay(epoch=t, decay_rate=decay_rate)
 
     # return buckets.bucket_list[arm].colour == BucketColour.RED
     return False
@@ -323,8 +337,8 @@ if __name__ == '__main__':
     pr_red_ball_red_bucket = 2 / 3
     pr_red_ball_blue_bucket = 1 / 3
     prior_red_list = [0.7, 0.3]
-    agent_num = 5
-    action_num = 1
+    agent_num = 2
+    action_num = 2
     preferred_colour_pr_list = [0.8, 0.2]
     score_func = ScoreFunction.LOG
     decision_rule = DecisionRule.DETERMINISTIC
