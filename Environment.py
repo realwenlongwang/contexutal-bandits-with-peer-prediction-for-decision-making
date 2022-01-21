@@ -33,6 +33,18 @@ class DecisionRule(Enum):
     DETERMINISTIC = 1
 
 
+def NaiveBayesOneIter(prior, signal, bucket_no, pr_rs_ru, pr_rs_bu):
+    posterior = np.array(prior)
+    if signal.name == 'RED':
+        posterior[bucket_no] = prior[bucket_no] * pr_rs_ru / (
+                    prior[bucket_no] * pr_rs_ru + (1 - prior[bucket_no]) * pr_rs_bu)
+    else:
+        posterior[bucket_no] = prior[bucket_no] * (1 - pr_rs_ru) / (
+                    prior[bucket_no] * (1 - pr_rs_ru) + (1 - prior[bucket_no]) * (1 - pr_rs_bu))
+
+    return posterior
+
+
 class PeerPrediction:
     def __init__(self, no, prior_red, pr_red_ball_red_bucket, pr_red_ball_blue_bucket):
         self.no = no
@@ -45,20 +57,36 @@ class PeerPrediction:
         self.sq_reported_signal_history = []
         peer_prediction = self.pr_red_ball_red_bucket * prior_red + self.pr_red_ball_blue_bucket * (1 - prior_red)
         self.sq_prediction_history.append(np.array([peer_prediction, 1 - peer_prediction]))
+        self.reported_signal_prediction = prior_red
 
-    def sq_report(self, prediction_list, reported_signal):
-        peer_prediction_red = self.pr_red_ball_red_bucket * prediction_list[0] + self.pr_red_ball_blue_bucket * prediction_list[1]
+    def __reported_signal_update(self, reported_signal):
+        prior = self.reported_signal_prediction
+        if reported_signal.name == 'RED':
+            posterior =  prior * self.pr_red_ball_red_bucket / (
+                    prior * self.pr_red_ball_red_bucket + (1 - prior) * self.pr_red_ball_blue_bucket)
+        else:
+            posterior = prior * (1 - self.pr_red_ball_red_bucket) / (
+                                 prior * (1 - self.pr_red_ball_red_bucket) + (1 - prior) * (1 - self.pr_red_ball_blue_bucket))
+
+        self.reported_signal_prediction = posterior
+
+
+    def sq_report(self, pi_list, mean_list, reported_signal):
+        peer_prediction_red = self.pr_red_ball_red_bucket * pi_list[0] + self.pr_red_ball_blue_bucket * pi_list[1]
         peer_prediction = np.array([peer_prediction_red, 1 - peer_prediction_red])
         self.sq_prediction_history.append(peer_prediction)
         self.sq_reported_signal_history.append(reported_signal)
-        self.current_prediction = prediction_list.copy()
+        # self.current_prediction = pi_list.copy()
+        self.current_prediction = mean_list.copy()
+        self.__reported_signal_update(reported_signal)
 
     def report(self, prediction_list, reported_signal):
         peer_prediction_red = self.pr_red_ball_red_bucket * prediction_list[0] + self.pr_red_ball_blue_bucket * prediction_list[1]
         peer_prediction = np.array([peer_prediction_red, 1-peer_prediction_red])
         self.prediction_history.append(peer_prediction)
         self.reported_signal_history.append(reported_signal)
-
+        # self.current_prediction = prediction_list.copy()
+        self.__reported_signal_update(reported_signal)
 
     def log_resolve(self):
         score_list = []
@@ -89,19 +117,18 @@ class PeerDecision:
             PeerPrediction(no, prior_red, pr_red_ball_red_bucket, pr_red_ball_blue_bucket) for no, prior_red in
             zip(range(action_num), prior_red_instances))
 
-    def sq_report(self, pi_array, reported_signal_array, index):
+    def sq_report(self, pi_array, mean_prediction, reported_signal_array, index):
         signal = Ball.RED if np.asscalar(reported_signal_array) >= 0 else Ball.BLUE
         pi = np.asscalar(pi_array)
-        self.peer_decision_list[index].sq_report([pi, 1 - pi], signal)
+        mean_prediction = np.asscalar(mean_prediction)
+        self.peer_decision_list[index].sq_report([pi, 1 - pi], [mean_prediction, 1-mean_prediction], signal)
 
     def report(self, pi_array, reported_signal_array, index):
         signal = Ball.RED if np.asscalar(reported_signal_array) >= 0 else Ball.BLUE
         pi = np.asscalar(pi_array)
         self.peer_decision_list[index].report([pi, 1 - pi], signal)
 
-
     def read_current_pred(self, index):
-
         return [self.peer_decision_list[index].current_prediction[0]]
 
     def log_resolve(self):
@@ -111,6 +138,8 @@ class PeerDecision:
             reward_array[:, i] = temp_reward
         return reward_array
 
+    def reported_signal_aggregated_prediction(self):
+        return np.array([pp.reported_signal_prediction for pp in self.peer_decision_list])
 
 
 class PeerDecisionMultiReports:
@@ -118,6 +147,7 @@ class PeerDecisionMultiReports:
         self.action_num = action_num
         self.agent_num = agent_num
         self.peer_decision_list = list(PeerPrediction(no, prior_red, pr_red_ball_red_bucket, pr_red_ball_blue_bucket) for no, prior_red in zip(range(self.action_num), prior_red_instances))
+
 
     def sq_report(self, pi_array, reported_signal_array):
         for pp, pi, mean in zip(self.peer_decision_list, pi_array[0], reported_signal_array[0]):
@@ -140,6 +170,8 @@ class PeerDecisionMultiReports:
             temp_reward = peer_prediction.log_resolve()
             reward_array[:, i] = temp_reward
         return reward_array
+
+
 
 
 class PredictionMarket:

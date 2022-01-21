@@ -42,7 +42,7 @@ class Agent:
     def load_perfect_weights(self, pr_red_ball_red_bucket, pr_red_ball_blue_bucket):
         for i in range(self.action_num):
             self.theta_mean[i*self.feature_num, i] = np.log(pr_red_ball_red_bucket/ pr_red_ball_blue_bucket)
-            self.theta_mean[i*self.feature_num + 1, i] = np.log(pr_red_ball_blue_bucket/ pr_red_ball_red_bucket)
+            self.theta_mean[i*self.feature_num + 1, i] = np.log((1 - pr_red_ball_red_bucket)/ (1 - pr_red_ball_blue_bucket))
             self.theta_mean[i*self.feature_num + 2, i] = 1
 
 
