@@ -194,8 +194,6 @@ class StochasticGradientAgent(Agent):
 
         reported_signal_array = np.matmul(ball_signal, self.theta_mean)
 
-
-
         mean_array = np.matmul(signal, self.theta_mean)
 
         if self.learning_std:
@@ -519,6 +517,10 @@ class DeterministicGradientAgent(Agent):
 
         signal = self.signal_encode(bucket_no, ball_colour, current_prediction)
 
+        ball_signal = self.signal_encode(bucket_no, ball_colour, np.ones(np.shape(current_prediction)) * 0.5)
+
+        reported_signal_array = np.matmul(ball_signal, self.theta_mean)
+
         mean_array = np.matmul(signal, self.theta_mean)
 
         # if np.any(np.isnan(mean_array)):
@@ -537,7 +539,7 @@ class DeterministicGradientAgent(Agent):
                 else:
                     best_report = current_prediction[i]
                 self.report_history_list[-1].append(best_report)
-        return signal, mean_array
+        return signal, mean_array, reported_signal_array
 
     def __print_info(self):
         print(self.name)
